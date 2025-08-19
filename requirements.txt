@@ -1,3 +1,4 @@
+pyyaml
 cmake==3.14.4
 attrs==25.3.0
 gitpython
