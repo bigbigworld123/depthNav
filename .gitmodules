@@ -1,0 +1,3 @@
+[submodule "habitat-sim"]
+	path = habitat-sim
+	url = git@github.com:rislab/habitat-sim.git
