@@ -19,7 +19,7 @@ if __name__ == "__main__":
     run_experiment(
         script="depthnav/scripts/train_bptt.py",
         experiment_dir="examples/navigation/logs/drone_dome",
-        base_config_file="examples/navigation/train_cfg/nav2_ring.yaml",
+        base_config_file="examples/navigation/train_cfg/nav_ring.yaml",
         policy_config_file="examples/navigation/policy_cfg/small_yaw.yaml",
         config_keys=config_keys,
         run_params=run_params,

@@ -135,7 +135,7 @@ def parse_args():
         help="Vertical resolution of the window.",
     )
     parser.add_argument('--cfg_file', type=str,
-        default='examples/navigation/train_cfg/nav2_ring.yaml'
+        default='examples/navigation/train_cfg/nav_ring.yaml'
     )
     args = parser.parse_args()
     

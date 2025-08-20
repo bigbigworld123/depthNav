@@ -13,8 +13,8 @@ if __name__ == "__main__":
         "level1": (True, "configs/level_1", 20000),
     }
     base_config_files=[
-        "examples/navigation/train_cfg/nav2_empty.yaml",
-        "examples/navigation/train_cfg/nav2_levelX.yaml",
+        "examples/navigation/train_cfg/nav_empty.yaml",
+        "examples/navigation/train_cfg/nav_levelX.yaml",
     ]
     run_experiment(
         script="depthnav/scripts/train_bptt.py",
@@ -24,10 +24,10 @@ if __name__ == "__main__":
         base_config_files=base_config_files,
         policy_config_file="examples/navigation/policy_cfg/small_yaw.yaml",
         eval_configs=[
-            "examples/navigation/eval_cfg/nav2_level1.yaml",
+            "examples/navigation/eval_cfg/nav_level1.yaml",
         ],
         eval_csvs=[
-            "examples/navigation/logs/level1/nav2_level_1.csv",
+            "examples/navigation/logs/level1/nav_level_1.csv",
         ],
         curriculum=True,
         max_retries=5,
