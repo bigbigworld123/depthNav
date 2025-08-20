@@ -3,6 +3,7 @@
 Minimal habitat_sim scene viewer
 based-off habitat_sim/examples/scripts/viewer.py
 """
+
 import argparse
 import ctypes
 import math
@@ -26,7 +27,6 @@ from habitat_sim.utils.settings import default_sim_settings, make_cfg
 
 
 class HabitatSimInteractiveViewer(Application):
-
     def __init__(self, sim_settings: Dict[str, Any]) -> None:
         self.sim_settings: Dict[str:Any] = sim_settings
 
@@ -114,7 +114,6 @@ class HabitatSimInteractiveViewer(Application):
 
         # Occasionally a frame will pass quicker than 1/60 seconds
         if self.time_since_last_simulation >= 1.0 / self.fps:
-
             # reset time_since_last_simulation, accounting for potential overflow
             self.time_since_last_simulation = math.fmod(
                 self.time_since_last_simulation, 1.0 / self.fps
@@ -194,7 +193,7 @@ class HabitatSimInteractiveViewer(Application):
 
         if self.sim is None:
             self.sim = habitat_sim.Simulator(self.cfg)
-        elif self.sim.config.sim_cfg.scene_id == self.cfg.sim_cfg.scene_id: # edge case
+        elif self.sim.config.sim_cfg.scene_id == self.cfg.sim_cfg.scene_id:  # edge case
             # we need to force a reset, so change the internal config scene name
             self.sim.config.sim_cfg.scene_id = "NONE"
         self.sim.reconfigure(self.cfg)
@@ -271,9 +270,7 @@ class HabitatSimInteractiveViewer(Application):
             else:
                 cur_scene_index = scene_ids.index(self.sim_settings["scene"])
 
-            next_scene_index = min(
-                max(cur_scene_index + inc, 0), len(scene_ids) - 1
-            )
+            next_scene_index = min(max(cur_scene_index + inc, 0), len(scene_ids) - 1)
             self.sim_settings["scene"] = scene_ids[next_scene_index]
             self.reconfigure_sim()
             logger.info(
@@ -377,6 +374,7 @@ Key Commands:
 """
         )
 
+
 class Timer:
     """
     Timer class used to keep track of time between buffer swaps
@@ -420,7 +418,6 @@ class Timer:
         Timer.prev_frame_time = time.time()
 
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
 
@@ -451,13 +448,14 @@ def parse_args():
         help="Vertical resolution of the window.",
     )
     args = parser.parse_args()
-    
+
     if args.width < 1:
         parser.error("width must be a positive non-zero integer.")
     if args.height < 1:
         parser.error("height must be a positive non-zero integer.")
 
     return args
+
 
 if __name__ == "__main__":
     args = parse_args()

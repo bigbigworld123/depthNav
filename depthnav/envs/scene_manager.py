@@ -25,13 +25,13 @@ from ..utils.type import Uniform, Normal
 from ..utils.rotation3 import Rotation3
 from .dataloader import SimpleDataLoader, ChildrenPathDataset
 
-import skfmm # pip install scikit-fmm
+import skfmm
 import scipy.ndimage
 
 DEBUG = False
 
 origin = mn.Vector3(0.0, 0.0, 0.0)
-eye_pos_near = mn.Vector3(0.1, 0.5, 1)*3
+eye_pos_near = mn.Vector3(0.1, 0.5, 1) * 3
 eye_pos_back = mn.Vector3(0, 0.8, 2)
 eye_pos_follow_near = mn.Vector3(0.1, 0.5, 1)
 eye_pos_follow_back = mn.Vector3(0, 0.5, 1)
@@ -51,16 +51,21 @@ for i in np.linspace(0, 1, 100):
     color = mn.Color4(1.0 - 0.5 * i, 0.5 * i, 0.5 * i, 1.0)  # RGBA color
     ColorSet3.append(color)
 
+
 def color_consequence(color1=orange, color2=cyan, factor=1):
-    factor = np.array(factor).clip(min=0.,max=1.)
-    return color1*(1-factor)+factor*color2
+    factor = np.array(factor).clip(min=0.0, max=1.0)
+    return color1 * (1 - factor) + factor * color2
+
 
 def calc_camera_transform(
-        eye_translation=mn.Vector3(1, 1, 1), lookat=mn.Vector3(0, 0, 0)
+    eye_translation=mn.Vector3(1, 1, 1), lookat=mn.Vector3(0, 0, 0)
 ):
     # choose y-up to match Habitat's y-up convention
     camera_up = mn.Vector3(0.0, 1.0, 0.0)
-    return mn.Matrix4.look_at(mn.Vector3(eye_translation), mn.Vector3(lookat), camera_up)
+    return mn.Matrix4.look_at(
+        mn.Vector3(eye_translation), mn.Vector3(lookat), camera_up
+    )
+
 
 @dataclass
 class Bounds:
@@ -83,15 +88,27 @@ class UniformObstacleGenerator:
             self._get_all_children_path(obstacle_set) for obstacle_set in obstacle_sets
         ]
         self.set_densities = set_densities
-        self.obstacle_bounds = from_dict(Bounds, obstacle_bounds) if type(obstacle_bounds) == dict else obstacle_bounds
+        self.obstacle_bounds = (
+            from_dict(Bounds, obstacle_bounds)
+            if type(obstacle_bounds) == dict
+            else obstacle_bounds
+        )
 
         # RNGs
         self.rotation_rng = self._create_rng("rotation", random_kwargs)
-        self.scale_rng = self._create_rng("scale", random_kwargs, default_rng=Uniform([1.,1.,1.], [0.,0.,0.]))
+        self.scale_rng = self._create_rng(
+            "scale",
+            random_kwargs,
+            default_rng=Uniform([1.0, 1.0, 1.0], [0.0, 0.0, 0.0]),
+        )
         self.num_template_rescales_per_scene = num_template_rescales_per_scene
 
-
-    def _create_rng(self, key: str, random_kwargs: Dict, default_rng=Uniform([0.,0.,0.], [0.,0.,0.])):
+    def _create_rng(
+        self,
+        key: str,
+        random_kwargs: Dict,
+        default_rng=Uniform([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]),
+    ):
         aliases = {"uniform": Uniform, "normal": Normal}
         try:
             rng_class = aliases[random_kwargs[key]["class"]]
@@ -100,7 +117,6 @@ class UniformObstacleGenerator:
             return rng_class(mean, half)
         except:
             return default_rng
-    
 
     def _get_all_children_path(self, path):
         if os.path.isdir(path):
@@ -116,7 +132,6 @@ class UniformObstacleGenerator:
             matches = [filename for filename in file_paths if basename in filename]
             return matches
 
-
     @timerlog.timer.timed
     def add_obstacles_to_scene(self, scene: habitat_sim.scene):
         template_mgr = scene.get_object_template_manager()
@@ -128,12 +143,16 @@ class UniformObstacleGenerator:
             template_ids = self._load_templates(template_mgr, obstacle_set)
             random_indices = th.randint(0, high=len(template_ids), size=(num_samples,))
             for i in range(num_samples):
-                new_obj = rigid_mgr.add_object_by_template_id(template_ids[random_indices[i]])
+                new_obj = rigid_mgr.add_object_by_template_id(
+                    template_ids[random_indices[i]]
+                )
                 new_obj.translation = mn.Vector3(positions[i])
-                new_obj.rotation = mn.Quaternion(mn.Vector3(*orientations[i][0:3]), orientations[i][3])
-                new_obj.motion_type = habitat_sim.physics.MotionType.STATIC 
+                new_obj.rotation = mn.Quaternion(
+                    mn.Vector3(*orientations[i][0:3]), orientations[i][3]
+                )
+                new_obj.motion_type = habitat_sim.physics.MotionType.STATIC
                 obstacles.append(new_obj)
-        
+
         # reload mesh kd-tree so new obstacles get checked for collisions
         scene.recompute_mesh_kdtree()
         return obstacles
@@ -161,13 +180,14 @@ class UniformObstacleGenerator:
                 sample_scale = std_to_habitat(sample_scale)[0][0]
                 template_copy.scale = mn.Vector3(*sample_scale)
                 obj_scaled_handle = obj_handle + f"_copy_{i}"
-                copy_id = template_mgr.register_template(template_copy, obj_scaled_handle)
+                copy_id = template_mgr.register_template(
+                    template_copy, obj_scaled_handle
+                )
                 template_ids.append(copy_id)
 
         return template_ids
 
-
-    def generate_samples(self, density):       
+    def generate_samples(self, density):
         # determine the number of points to generate based on density and volume of bounds
         low = th.tensor(self.obstacle_bounds.min)
         high = th.tensor(self.obstacle_bounds.max)
@@ -185,6 +205,7 @@ class UniformObstacleGenerator:
 
         return num_samples, positions, orientations.numpy()
 
+
 class PoissonObstacleGenerator(UniformObstacleGenerator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -192,7 +213,7 @@ class PoissonObstacleGenerator(UniformObstacleGenerator):
     # @timerlog.timer.timed
     def generate_samples(self, density):
         # estimate minimum distance between samples from density
-        radius = th.sqrt(th.tensor(2. / (th.pi * density))).item()
+        radius = th.sqrt(th.tensor(2.0 / (th.pi * density))).item()
         lower_bound = self.obstacle_bounds.min[:2]
         upper_bound = self.obstacle_bounds.max[:2]
 
@@ -214,7 +235,7 @@ class PoissonObstacleGenerator(UniformObstacleGenerator):
     def poisson_disk_sampling(radius, lower_bound, upper_bound, k=30):
         """
         Poisson disk sampling in 2D using Bridson's algorithm
-    
+
         Args:
             radius (float): Minimum distance between points.
             lower_bound (tuple): (x_min, y_min) specifying the lower bound.
@@ -227,24 +248,23 @@ class PoissonObstacleGenerator(UniformObstacleGenerator):
         x_min, y_min = lower_bound
         x_max, y_max = upper_bound
         width, height = x_max - x_min, y_max - y_min
-    
+
         # Grid cell size (each grid cell contains at most 1 sample)
         cell_size = radius / th.sqrt(th.tensor(2.0))
         grid_width = int(width / cell_size) + 1
         grid_height = int(height / cell_size) + 1
-    
+
         # Grid to store sample indices (-1 means empty)
         grid = -th.ones((grid_width, grid_height), dtype=th.long)
-    
+
         # Initial random sample
-        first_sample = th.tensor([
-            th.rand(1).item() * width + x_min,
-            th.rand(1).item() * height + y_min
-        ])
-    
+        first_sample = th.tensor(
+            [th.rand(1).item() * width + x_min, th.rand(1).item() * height + y_min]
+        )
+
         samples = [first_sample]
         active_list = [first_sample]
-    
+
         # Helper function to get grid coordinates
         def grid_coords(point):
             return (point - th.tensor([x_min, y_min])) // cell_size
@@ -261,16 +281,20 @@ class PoissonObstacleGenerator(UniformObstacleGenerator):
                 # Generate random point in the ring [r, 2r]
                 angle = th.rand(1) * 2 * th.pi
                 radius_offset = radius * (1 + th.rand(1))
-                new_point = center + radius_offset * th.tensor([th.cos(angle), th.sin(angle)])
+                new_point = center + radius_offset * th.tensor(
+                    [th.cos(angle), th.sin(angle)]
+                )
                 # Check bounds
-                if not (x_min <= new_point[0] <= x_max and y_min <= new_point[1] <= y_max):
+                if not (
+                    x_min <= new_point[0] <= x_max and y_min <= new_point[1] <= y_max
+                ):
                     continue
-            
+
                 # Check neighboring cells for conflicts
                 gx, gy = grid_coords(new_point).long()
                 x0, x1 = max(gx - 2, 0), min(gx + 3, grid_width)
                 y0, y1 = max(gy - 2, 0), min(gy + 3, grid_height)
-            
+
                 valid = True
                 for i in range(x0, x1):
                     for j in range(y0, y1):
@@ -281,17 +305,17 @@ class PoissonObstacleGenerator(UniformObstacleGenerator):
                                 break
                     if not valid:
                         break
-            
+
                 if valid:
                     samples.append(new_point)
                     active_list.append(new_point)
                     grid[gx, gy] = len(samples) - 1
                     found = True
-        
+
             # Remove if no valid points found
             if not found:
                 active_list.pop(idx)
-    
+
         return th.stack(samples)
 
 
@@ -302,7 +326,7 @@ class SceneManager:
     }
 
     def __init__(
-        self, 
+        self,
         path: str,
         dataset_path: str = "./datasets/depthnav_dataset",
         spawn_obstacles: bool = False,
@@ -323,17 +347,20 @@ class SceneManager:
         noise_settings=None,
         gpu2gpu=True,
     ):
-
         if sensor_settings is None:
             raise ValueError("No sensor settings provided")
 
         self.dataset_path = os.path.abspath(dataset_path)
         self._scene_dataset_config_path = [
-            os.path.join(self.dataset_path, file) for file in
-            os.listdir(self.dataset_path) if
-            file.endswith(".scene_dataset_config.json")
+            os.path.join(self.dataset_path, file)
+            for file in os.listdir(self.dataset_path)
+            if file.endswith(".scene_dataset_config.json")
         ][0]
-        self.scene_path = path if os.path.isabs(path) else os.path.abspath(os.path.join(self.dataset_path, path))
+        self.scene_path = (
+            path
+            if os.path.isabs(path)
+            else os.path.abspath(os.path.join(self.dataset_path, path))
+        )
         self.reload_scenes = reload_scenes
         self.num_scene = num_scene
         self.num_agent_per_scene = num_agent_per_scene
@@ -351,17 +378,21 @@ class SceneManager:
         if spawn_obstacles:
             generator_class = self.obstacle_generator_aliases[obstacle_generator_class]
             self.obstacle_generator = generator_class(**obstacle_generator_kwargs)
-            self._obstacles: List[ManagedRigidObject] = [None for _ in range(self.num_scene)]
+            self._obstacles: List[ManagedRigidObject] = [
+                None for _ in range(self.num_scene)
+            ]
         self.load_geodesics = load_geodesics
-        self.geodesics: List[np.lib.npyio.NpyFile] = [None for _ in range(self.num_scene)]
-        
+        self.geodesics: List[np.lib.npyio.NpyFile] = [
+            None for _ in range(self.num_scene)
+        ]
+
         self._data_loader = SimpleDataLoader(
             ChildrenPathDataset(self.scene_path), batch_size=num_scene, shuffle=True
         )
         self._scene_loader = cycle(self._data_loader)
         self.scene_paths: List[str] = [None for _ in range(num_scene)]
         self.scenes: List[habitat_sim.Simulator] = [None for _ in range(num_scene)]
-        self.agents: List[List[habitat_sim.agent]] = [[] for _ in range(num_scene)]
+        self.agents: List[List[habitat_sim.Agent]] = [[] for _ in range(num_scene)]
 
         self._scene_bounds = [None for _ in range(num_scene)]
         self.is_multi_drone = multi_drone
@@ -370,28 +401,50 @@ class SceneManager:
 
         if self.render_settings is not None:
             assert "object_path" in self.render_settings
-            self._robot_path = str(Path(self.render_settings.get("object_path", None)).resolve())
+            self._robot_path = str(
+                Path(self.render_settings.get("object_path", None)).resolve()
+            )
             assert os.path.exists(self._robot_path), self._robot_path
-            self.render_settings["line_width"] = self.render_settings.get("line_width", 1.0)
+            self.render_settings["line_width"] = self.render_settings.get(
+                "line_width", 1.0
+            )
             self.render_settings["axes"] = self.render_settings.get("axes", False)
-            self.render_settings["trajectory"] = self.render_settings.get("trajectory", False)
-            self.render_settings["sensor_type"] = self.render_settings.get("sensor_type", "color")
+            self.render_settings["trajectory"] = self.render_settings.get(
+                "trajectory", False
+            )
+            self.render_settings["sensor_type"] = self.render_settings.get(
+                "sensor_type", "color"
+            )
             self.render_settings["mode"] = self.render_settings.get("mode", "fix")
             self.render_settings["view"] = self.render_settings.get("view", "near")
-            self.render_settings["resolution"] = self.render_settings.get("resolution", [256, 256])
-            self.render_settings["position"] = self.render_settings.get("position", None)
+            self.render_settings["resolution"] = self.render_settings.get(
+                "resolution", [256, 256]
+            )
+            self.render_settings["position"] = self.render_settings.get(
+                "position", None
+            )
             self._render_camera = [None for _ in range(num_scene)]
-            self._line_renders: habitat_sim.gfx.DebugLineRender = [None for _ in range(num_scene)]
+            self._line_renders: habitat_sim.gfx.DebugLineRender = [
+                None for _ in range(num_scene)
+            ]
 
         if self.render_settings is not None or multi_drone:
             self._obj_mgrs: RigidObjectManager = [None for _ in range(num_scene)]
-            self._objects = [[None for _ in range(num_agent_per_scene)] for _ in range(num_scene)]
+            self._objects = [
+                [None for _ in range(num_agent_per_scene)] for _ in range(num_scene)
+            ]
 
-        self.trajectory = [[[] for _ in range(num_agent_per_scene)] for _ in range(num_scene)]
-        self._collision_point = [[None for _ in range(num_agent_per_scene)] for _ in range(num_scene)]
-        self._is_out_bounds = [[False for _ in range(num_agent_per_scene)] for _ in range(num_scene)]
+        self.trajectory = [
+            [[] for _ in range(num_agent_per_scene)] for _ in range(num_scene)
+        ]
+        self._collision_point = [
+            [None for _ in range(num_agent_per_scene)] for _ in range(num_scene)
+        ]
+        self._is_out_bounds = [
+            [False for _ in range(num_agent_per_scene)] for _ in range(num_scene)
+        ]
 
-    def get_pose(self, indices: Union[List, int]=None):
+    def get_pose(self, indices: Union[List, int] = None):
         """get position and rotation of agents by indice"""
         if indices is None:
             position = np.empty((self.num_agent_per_scene * self.num_scene, 3))
@@ -399,7 +452,9 @@ class SceneManager:
             for scene_id in range(self.num_scene):
                 for agent_id in range(self.num_agent_per_scene):
                     state = self.agents[scene_id][agent_id].get_state()
-                    std_pos, std_ori = habitat_to_std(state.position, state.rotation.components)
+                    std_pos, std_ori = habitat_to_std(
+                        state.position, state.rotation.components
+                    )
                     position[scene_id * self.num_agent_per_scene + agent_id] = std_pos
                     rotation[scene_id * self.num_agent_per_scene + agent_id] = std_ori
 
@@ -434,8 +489,12 @@ class SceneManager:
                 #         position=hab_pos[drone_id], rotation=quaternion.from_float_array(hab_ori[drone_id])
                 #     )
                 # )
-                self.agents[scene_id][agent_id].scene_node.translation = hab_pos[drone_id]
-                self.agents[scene_id][agent_id].scene_node.rotation = mn.Quaternion(mn.Vector3(hab_ori[drone_id][1:]), hab_ori[drone_id][0])
+                self.agents[scene_id][agent_id].scene_node.translation = hab_pos[
+                    drone_id
+                ]
+                self.agents[scene_id][agent_id].scene_node.rotation = mn.Quaternion(
+                    mn.Vector3(hab_ori[drone_id][1:]), hab_ori[drone_id][0]
+                )
 
                 # disable updating trajectory for now
                 # self.trajectory[scene_id][agent_id].insert(0,
@@ -443,8 +502,11 @@ class SceneManager:
                 # )
                 drone_id += 1
                 if self.is_multi_drone:
-                    self._objects[scene_id][agent_id].root_scene_node.transformation = \
-                        self.agents[scene_id][agent_id].scene_node.transformation
+                    self._objects[scene_id][
+                        agent_id
+                    ].root_scene_node.transformation = self.agents[scene_id][
+                        agent_id
+                    ].scene_node.transformation
                     # self._objects[scene_id][agent_id].scene_node.translation = hab_pos[drone_id]
                     # self._objects[scene_id][agent_id].scene_node.rotation = mn.Quaternion(mn.Vector3(hab_ori[drone_id][1:]), hab_ori[drone_id][0])
         self._update_collision_infos()
@@ -453,8 +515,11 @@ class SceneManager:
             # set the pose of objects or agents in the scene
             for scene_id in range(self.num_scene):
                 for agent_id in range(self.num_agent_per_scene):
-                    self._objects[scene_id][agent_id].root_scene_node.transformation = \
-                        self.agents[scene_id][agent_id].scene_node.transformation
+                    self._objects[scene_id][
+                        agent_id
+                    ].root_scene_node.transformation = self.agents[scene_id][
+                        agent_id
+                    ].scene_node.transformation
 
     @timerlog.timer.timed
     def get_observation(self, indices: Optional[int] = None):
@@ -469,7 +534,9 @@ class SceneManager:
             for index in indices:
                 agent_id = index % self.num_agent_per_scene
                 scene_id = index // self.num_agent_per_scene
-                obses.append(self.scenes[scene_id].get_sensor_observations(int(agent_id)))
+                obses.append(
+                    self.scenes[scene_id].get_sensor_observations(int(agent_id))
+                )
         return obses
 
     # @timerlog.timer.timed
@@ -485,32 +552,49 @@ class SceneManager:
 
             col_record = self.scenes[scene_id].get_closest_collision_point(
                 pt=self.agents[scene_id][agent_id].scene_node.translation,
-                max_search_radius=self.sensitive_radius
+                max_search_radius=self.sensitive_radius,
             )
             self._collision_point[scene_id][agent_id] = col_record.hit_pos
             self._is_out_bounds[scene_id][agent_id] = col_record.is_out_bound
 
         if self.is_multi_drone:
             for scene_id in range(self.num_scene):
-                positions = np.array([agent.state.position for agent in self.agents[scene_id]])
-                cur_dis = \
-                    np.linalg.norm(positions - np.array([self._collision_point[scene_id][agent_id] for agent_id in range(self.num_agent_per_scene)]), axis=1)
-                rela_dis = np.diag(np.full(self.num_agent_per_scene, np.inf, dtype=np.float32))
+                positions = np.array(
+                    [agent.state.position for agent in self.agents[scene_id]]
+                )
+                cur_dis = np.linalg.norm(
+                    positions
+                    - np.array(
+                        [
+                            self._collision_point[scene_id][agent_id]
+                            for agent_id in range(self.num_agent_per_scene)
+                        ]
+                    ),
+                    axis=1,
+                )
+                rela_dis = np.diag(
+                    np.full(self.num_agent_per_scene, np.inf, dtype=np.float32)
+                )
                 for i in range(self.num_agent_per_scene):
                     j = i + 1
                     rela_dis[i, j:] = np.linalg.norm(positions[j:] - positions[i])
                 rela_dis += rela_dis.T
-                min_rela_dis, min_indices = np.min(rela_dis, axis=1), np.argmin(rela_dis, axis=1)
+                min_rela_dis, min_indices = (
+                    np.min(rela_dis, axis=1),
+                    np.argmin(rela_dis, axis=1),
+                )
                 is_rela_dis_less = min_rela_dis < cur_dis
                 for agent_id in np.arange(self.num_agent_per_scene)[is_rela_dis_less]:
-                    self._collision_point[scene_id][agent_id] = positions[min_indices[agent_id]]
+                    self._collision_point[scene_id][agent_id] = positions[
+                        min_indices[agent_id]
+                    ]
 
     def get_point_is_collision(
         self,
         std_positions: Optional[th.tensor] = None,
         scene_id: Optional[int] = None,
         uav_radius: Optional[float] = None,
-        hab_positions: Optional[np.ndarray] = None
+        hab_positions: Optional[np.ndarray] = None,
     ):
         """
         search within uav_radius for obstacles
@@ -526,8 +610,7 @@ class SceneManager:
         is_in_bounds = np.empty(len(hab_positions), dtype=bool)
         for indice, hab_position in enumerate(hab_positions):
             col_record = self.scenes[scene_id].get_closest_collision_point(
-                pt=hab_position.reshape(3, 1),
-                max_search_radius=uav_radius
+                pt=hab_position.reshape(3, 1), max_search_radius=uav_radius
             )
             min_distance[indice] = np.linalg.norm((col_record.hit_pos - hab_position))
             is_in_bounds[indice] = not col_record.is_out_bound
@@ -535,26 +618,30 @@ class SceneManager:
 
     def get_collision_point(self, indices=None):
         if indices is None:
-            return habitat_to_std(np.array(self._collision_point).reshape((-1, 3)), None)[0]
+            return habitat_to_std(
+                np.array(self._collision_point).reshape((-1, 3)), None
+            )[0]
         else:
-            return habitat_to_std(np.array(self._collision_point).reshape((-1, 3))[indices], None)[0]
+            return habitat_to_std(
+                np.array(self._collision_point).reshape((-1, 3))[indices], None
+            )[0]
 
     def render(
-            self,
-            is_draw_axes: bool = False,
-            points: Optional[th.Tensor] = None,
-            lines: Optional[th.Tensor] = None,
-            curves: Optional[th.Tensor] = None,
-            c_curves: Optional[th.Tensor] = None,
+        self,
+        is_draw_axes: bool = False,
+        points: Optional[th.Tensor] = None,
+        lines: Optional[th.Tensor] = None,
+        curves: Optional[th.Tensor] = None,
+        c_curves: Optional[th.Tensor] = None,
     ):
         """render for visualization and debugging purposes"""
 
         # draw lines in local coordinate of agent_s or objects
         def draw_axes(sim, translation, axis_len=1.0):
             lr = sim.get_debug_line_render()
-            x_axis, _ = std_to_habitat(th.Tensor([axis_len, 0., 0.]), None)
-            y_axis, _ = std_to_habitat(th.Tensor([0., axis_len, 0.]), None)
-            z_axis, _ = std_to_habitat(th.Tensor([0., 0., axis_len]), None)
+            x_axis, _ = std_to_habitat(th.Tensor([axis_len, 0.0, 0.0]), None)
+            y_axis, _ = std_to_habitat(th.Tensor([0.0, axis_len, 0.0]), None)
+            z_axis, _ = std_to_habitat(th.Tensor([0.0, 0.0, axis_len]), None)
             lr.draw_transformed_line(translation, mn.Vector3(x_axis), red)
             lr.draw_transformed_line(translation, mn.Vector3(y_axis), green)
             lr.draw_transformed_line(translation, mn.Vector3(z_axis), blue)
@@ -592,7 +679,8 @@ class SceneManager:
                     curve = std_to_habitat(curve, None)[0]
                     curve = [mn.Vector3(point) for point in curve]
                     self._line_renders[0].draw_path_with_endpoint_circles(
-                        curve, 0.1, white)
+                        curve, 0.1, white
+                    )
 
         # draw the axes of agents
         if self.render_settings["axes"]:
@@ -613,18 +701,23 @@ class SceneManager:
                     # if len(traj) > 1:
                     #     self._line_renders[0].draw_path_with_endpoint_circles(
                     #         traj, 0.1, white)
-                    for line_id in np.arange(len(self.trajectory[scene_id][agent_id])-1):
+                    for line_id in np.arange(
+                        len(self.trajectory[scene_id][agent_id]) - 1
+                    ):
                         self._line_renders[scene_id].draw_transformed_line(
                             self.trajectory[scene_id][agent_id][line_id][:3],
-                            self.trajectory[scene_id][agent_id][line_id+1][:3],
-                            color_consequence(factor=line_id/10),
+                            self.trajectory[scene_id][agent_id][line_id + 1][:3],
+                            color_consequence(factor=line_id / 10),
                         )
                     # trajectory_data = np.array(self.trajectory[scene_id][agent_id])
                     # self._line_renders[scene_id].draw_transformed_line(trajectory_data[:3], self.trajectory[scene_id][agent_id][i+1][:3], white)
 
         # set the render camera pose
         if self.render_settings["mode"] == "follow":
-            if self.render_settings["view"] == "back" or self.render_settings["view"] == "near":
+            if (
+                self.render_settings["view"] == "back"
+                or self.render_settings["view"] == "near"
+            ):
                 if self.render_settings["view"] == "back":
                     rela_pos = eye_pos_follow_back
                 elif self.render_settings["view"] == "near":
@@ -633,10 +726,17 @@ class SceneManager:
                     if self.render_settings["position"] is None:
                         obj = self.agents[scene_id][0].get_state().position
                     else:
-                        obj = mn.Vector3(*std_to_habitat(th.tensor(self.render_settings["position"]), None)[0])
+                        obj = mn.Vector3(
+                            *std_to_habitat(
+                                th.tensor(self.render_settings["position"]), None
+                            )[0]
+                        )
                     camera_pose = calc_camera_transform(
-                        eye_translation=(self.agents[scene_id][0].scene_node.transformation * mn.Vector4(rela_pos,1)).xyz,
-                        lookat=obj
+                        eye_translation=(
+                            self.agents[scene_id][0].scene_node.transformation
+                            * mn.Vector4(rela_pos, 1)
+                        ).xyz,
+                        lookat=obj,
                     )
                     self._render_camera[scene_id].set_state(
                         habitat_sim.AgentState(
@@ -657,7 +757,9 @@ class SceneManager:
                     )
                     self._render_camera[scene_id].set_state(
                         habitat_sim.AgentState(
-                            rotation=R.from_matrix(np.array(camera_pose)[:3, :3]).as_quat(),
+                            rotation=R.from_matrix(
+                                np.array(camera_pose)[:3, :3]
+                            ).as_quat(),
                             position=camera_pose.translation,
                         )
                     )
@@ -670,10 +772,12 @@ class SceneManager:
                         scene_aabb = self._scene_bounds[scene_id]
                         scene_center = (scene_aabb.min + scene_aabb.max) / 2
                         scene_height = (
-                                               scene_aabb.max[1] - scene_aabb.min[1]
-                                       ) + scene_aabb.max[1] * 2
+                            scene_aabb.max[1] - scene_aabb.min[1]
+                        ) + scene_aabb.max[1] * 2
                     else:
-                        scene_center = std_to_habitat(th.tensor(self.render_settings["position"]), None)[0][0]
+                        scene_center = std_to_habitat(
+                            th.tensor(self.render_settings["position"]), None
+                        )[0][0]
                         scene_height = scene_center[1]
 
                     self._render_camera[scene_id].set_state(
@@ -681,13 +785,21 @@ class SceneManager:
                             rotation=R.from_euler(
                                 "zyx", [90, 0, -90], degrees=True
                             ).as_quat(),
-                            position=mn.Vector3(scene_center[0], scene_height, scene_center[2]),
+                            position=mn.Vector3(
+                                scene_center[0], scene_height, scene_center[2]
+                            ),
                         )
                     )
 
             elif self.render_settings["view"] == "near":
                 # fix the camera at third person view to observe the agent
-                obj = origin if self.render_settings["position"] is None else std_to_habitat(self.render_settings["position"], None)[0].squeeze()
+                obj = (
+                    origin
+                    if self.render_settings["position"] is None
+                    else std_to_habitat(self.render_settings["position"], None)[
+                        0
+                    ].squeeze()
+                )
                 for scene_id in range(self.num_scene):
                     camera_pose = calc_camera_transform(
                         eye_translation=eye_pos_near + obj, lookat=obj
@@ -716,7 +828,11 @@ class SceneManager:
 
             elif self.render_settings["view"] == "back":
                 # fix the camera at third person view to observe the agent
-                obj = origin if self.render_settings["position"] is None else std_to_habitat(self.render_settings["position"], None)[0]
+                obj = (
+                    origin
+                    if self.render_settings["position"] is None
+                    else std_to_habitat(self.render_settings["position"], None)[0]
+                )
                 for scene_id in range(self.num_scene):
                     camera_pose = calc_camera_transform(
                         eye_translation=eye_pos_back + obj, lookat=obj
@@ -776,9 +892,7 @@ class SceneManager:
         sensor_cfgs_list.append(sensor_spec)
 
         agent_cfg = habitat_sim.agent.AgentConfiguration(
-            radius=0.01,
-            height=0.01,
-            sensor_specifications=sensor_cfgs_list
+            radius=0.01, height=0.01, sensor_specifications=sensor_cfgs_list
         )
         return agent_cfg
 
@@ -790,7 +904,9 @@ class SceneManager:
         full_geodesic_path = os.path.join(self.dataset_path, geodesic_path)
         if geodesic_path != "" and os.path.exists(full_geodesic_path):
             data = np.load(full_geodesic_path)
-            self.geodesics[scene_id] = {key: th.from_numpy(data[key]) for key in data.files}
+            self.geodesics[scene_id] = {
+                key: th.from_numpy(data[key]) for key in data.files
+            }
             colorlog.log.info(f"Loaded geodesics from {geodesic_path}")
         else:
             # generate geodesics on the spot
@@ -802,7 +918,9 @@ class SceneManager:
         """
         load scenes and auto switch to next minibatch of scenes
         """
-        scene_paths = next(self._scene_loader) # returns a batch of num_scenes (or smaller)
+        scene_paths = next(
+            self._scene_loader
+        )  # returns a batch of num_scenes (or smaller)
         # extend scene_paths until we reach len num_scenes
         cycle_i = 0
         while len(scene_paths) < self.num_scene:
@@ -837,11 +955,19 @@ class SceneManager:
                     if self.load_geodesics:
                         self._load_geodesic(scene_path, scene_id)
 
-            
             if self.spawn_obstacles:
-                self._obstacles[scene_id] = self.obstacle_generator.add_obstacles_to_scene(self.scenes[scene_id])
+                self._obstacles[scene_id] = (
+                    self.obstacle_generator.add_obstacles_to_scene(
+                        self.scenes[scene_id]
+                    )
+                )
 
-            self._scene_bounds[scene_id] = self.scenes[scene_id].get_active_scene_graph().get_root_node().cumulative_bb
+            self._scene_bounds[scene_id] = (
+                self.scenes[scene_id]
+                .get_active_scene_graph()
+                .get_root_node()
+                .cumulative_bb
+            )
             # get agent handles in each scene
             self.agents[scene_id] = [
                 self.scenes[scene_id].get_agent(agent_id)
@@ -850,24 +976,34 @@ class SceneManager:
 
             # get render agent handles in each scene
             if self.render_settings is not None:
-                self._render_camera[scene_id] = self.scenes[scene_id].get_agent(self.num_agent_per_scene)
+                self._render_camera[scene_id] = self.scenes[scene_id].get_agent(
+                    self.num_agent_per_scene
+                )
                 # create line renders and object managers
-                self._obj_mgrs[scene_id] = self.scenes[scene_id].get_rigid_object_manager()
-                self._line_renders[scene_id] = self.scenes[scene_id].get_debug_line_render()
-                self._line_renders[scene_id].set_line_width(self.render_settings["line_width"])
+                self._obj_mgrs[scene_id] = self.scenes[
+                    scene_id
+                ].get_rigid_object_manager()
+                self._line_renders[scene_id] = self.scenes[
+                    scene_id
+                ].get_debug_line_render()
+                self._line_renders[scene_id].set_line_width(
+                    self.render_settings["line_width"]
+                )
                 # create objects in each scene
                 for agent_id in range(self.num_agent_per_scene):
-                    self._objects[scene_id][agent_id] = self._obj_mgrs[scene_id].add_object_by_template_handle(
-                        self._robot_path
-                    )
+                    self._objects[scene_id][agent_id] = self._obj_mgrs[
+                        scene_id
+                    ].add_object_by_template_handle(self._robot_path)
 
             if self.is_multi_drone:
                 if self._objects[scene_id][0] is None:
-                    self._obj_mgrs[scene_id] = self.scenes[scene_id].get_rigid_object_manager()
+                    self._obj_mgrs[scene_id] = self.scenes[
+                        scene_id
+                    ].get_rigid_object_manager()
                     for agent_id in range(self.num_agent_per_scene):
-                        self._objects[scene_id][agent_id] = self._obj_mgrs[scene_id].add_object_by_template_handle(
-                            self._robot_path
-                        )
+                        self._objects[scene_id][agent_id] = self._obj_mgrs[
+                            scene_id
+                        ].add_object_by_template_handle(self._robot_path)
 
     def _load_cfg(self, scene_path: str) -> habitat_sim.Simulator:
         """load single scene with agents"""
@@ -890,16 +1026,33 @@ class SceneManager:
         )
         return cfg
 
-    def reset_agents(self, std_positions: th.Tensor, std_orientations: th.Tensor, indices: Optional[th.Tensor]=None):
+    def reset_agents(
+        self,
+        std_positions: th.Tensor,
+        std_orientations: th.Tensor,
+        indices: Optional[th.Tensor] = None,
+    ):
         """external interference to reset all the agents to the initial state"""
-        hab_positions, hab_orientations = std_to_habitat(std_positions, std_orientations)
-        for indice, hab_position, hab_orientation in zip(np.arange(self.num_agent) if indices is None else indices, hab_positions, hab_orientations):
+        hab_positions, hab_orientations = std_to_habitat(
+            std_positions, std_orientations
+        )
+        for indice, hab_position, hab_orientation in zip(
+            np.arange(self.num_agent) if indices is None else indices,
+            hab_positions,
+            hab_orientations,
+        ):
             scene_id = indice // self.num_agent_per_scene
             agent_id = indice % self.num_agent_per_scene
             self._reset_agent(scene_id, agent_id, hab_position, hab_orientation)
         self._update_collision_infos(indices=indices)
 
-    def _reset_agent(self, scene_id: int, agent_id: int, position: np.ndarray, orientation: np.ndarray):
+    def _reset_agent(
+        self,
+        scene_id: int,
+        agent_id: int,
+        position: np.ndarray,
+        orientation: np.ndarray,
+    ):
         """reset the agent"""
         self.trajectory[scene_id][agent_id] = []
         self.agents[scene_id][agent_id].set_state(
@@ -909,7 +1062,9 @@ class SceneManager:
             )
         )
 
-    def _load_agents(self, num_agent: int) -> List[habitat_sim.agent.AgentConfiguration]:
+    def _load_agents(
+        self, num_agent: int
+    ) -> List[habitat_sim.agent.AgentConfiguration]:
         """create num_agent configurations"""
         agent_cfgs_list = []
         for i in range(num_agent):
@@ -925,9 +1080,7 @@ class SceneManager:
         """load single agent configuration"""
         sensor_cfgs_list = self._load_sensor()
         agent_cfg = habitat_sim.agent.AgentConfiguration(
-            radius=0.1,
-            height=0.1,
-            sensor_specifications=sensor_cfgs_list
+            radius=0.1, height=0.1, sensor_specifications=sensor_cfgs_list
         )
         return agent_cfg
 
@@ -945,11 +1098,15 @@ class SceneManager:
                 raise ValueError(f"Unsupported sensor type {sensor_str}")
             sensor_spec.uuid = sensor_cfg["uuid"]
             sensor_spec.resolution = sensor_cfg.get("resolution", [128, 128])
-            orientation = std_to_habitat(th.tensor(sensor_cfg.get("orientation", [0., 0, 0])), None)[0]
-            position = std_to_habitat(th.tensor(sensor_cfg.get("position", [0., 0, 0])), None)[0]
+            orientation = std_to_habitat(
+                th.tensor(sensor_cfg.get("orientation", [0.0, 0, 0])), None
+            )[0]
+            position = std_to_habitat(
+                th.tensor(sensor_cfg.get("position", [0.0, 0, 0])), None
+            )[0]
             sensor_spec.orientation = mn.Vector3(*orientation)
             sensor_spec.position = mn.Vector3(*position)
-            sensor_spec.far = sensor_cfg.get("far", 20.)
+            sensor_spec.far = sensor_cfg.get("far", 20.0)
             sensor_spec.near = sensor_cfg.get("near", 0.01)
             sensor_spec.hfov = sensor_cfg.get("hfov", 89)
             # If habitat is built --with-cuda flag, we can enable this to avoid
@@ -957,8 +1114,12 @@ class SceneManager:
             sensor_spec.gpu2gpu_transfer = self.gpu2gpu
             if self.noise_settings is not None:
                 if sensor_spec.uuid in self.noise_settings.keys():
-                    sensor_spec.noise_model = self.noise_settings[sensor_spec.uuid].get("model", "None")
-                    sensor_spec.noise_model_kwargs = self.noise_settings[sensor_spec.uuid].get("kwargs", {})
+                    sensor_spec.noise_model = self.noise_settings[sensor_spec.uuid].get(
+                        "model", "None"
+                    )
+                    sensor_spec.noise_model_kwargs = self.noise_settings[
+                        sensor_spec.uuid
+                    ].get("kwargs", {})
             sensor_cfgs_list.append(sensor_spec)
 
         return sensor_cfgs_list
@@ -966,18 +1127,20 @@ class SceneManager:
     def close(self):
         """
         release resources held by the simulator
-        found through testing that closing in reversed order prevents 
+        found through testing that closing in reversed order prevents
         GL::Context::Current(): no current context errors
         """
         for scene_id in reversed(range(self.num_scene)):
             if self.scenes[scene_id] is not None:
                 self.scenes[scene_id].close()
                 self.scenes[scene_id] = None
-    
+
     def fmm_3d(self, occupancy, target_ijk, grid_resolution):
         # compute truncated distance from obstacles
-        dist_outside = grid_resolution * scipy.ndimage.distance_transform_edt(occupancy == 0)
-        tsdf = np.clip(dist_outside, 0., 1.)
+        dist_outside = grid_resolution * scipy.ndimage.distance_transform_edt(
+            occupancy == 0
+        )
+        tsdf = np.clip(dist_outside, 0.0, 1.0)
 
         # speed is a piecewise function related to distance to nearest obstacle
         ROBOT_RADIUS = 0.3
@@ -1002,9 +1165,9 @@ class SceneManager:
         phi[target_ijk] = -1
 
         # compute travel cost from target
-        travel_time = skfmm.travel_time(phi, speed, dx=grid_resolution) # FMM
+        travel_time = skfmm.travel_time(phi, speed, dx=grid_resolution)  # FMM
         return travel_time
-    
+
     def calculate_gradient(self, costs, resolution):
         """
         Use finite differences to calculate gradients at each pixel in cost map
@@ -1029,7 +1192,9 @@ class SceneManager:
 
             # Central difference where both are valid
             central_mask = finite & plus_valid & minus_valid
-            grad[central_mask] = (plus[central_mask] - minus[central_mask]) / (2 * resolution)
+            grad[central_mask] = (plus[central_mask] - minus[central_mask]) / (
+                2 * resolution
+            )
 
             # Forward difference where only plus is valid
             forward_mask = finite & plus_valid & ~minus_valid
@@ -1037,7 +1202,9 @@ class SceneManager:
 
             # Backward difference where only minus is valid
             backward_mask = finite & ~plus_valid & minus_valid
-            grad[backward_mask] = (costs[backward_mask] - minus[backward_mask]) / resolution
+            grad[backward_mask] = (
+                costs[backward_mask] - minus[backward_mask]
+            ) / resolution
 
             # Else: leave as 0 (already initialized)
             return grad
@@ -1056,20 +1223,21 @@ class SceneManager:
         gradient /= norms
         return gradient
 
-    def generate_geodesic(self,
-                          scene_id: int,
-                          target: np.array,
-                          grid_resolution: float = 0.25):
+    def generate_geodesic(
+        self, scene_id: int, target: np.array, grid_resolution: float = 0.25
+    ):
         scene = self.scenes[scene_id]
         bb = scene.get_active_scene_graph().get_root_node().cumulative_bb
-        bb_habitat = th.tensor([[bb.min[0], bb.min[1], bb.min[2]], [bb.max[0], bb.max[1], bb.max[2]]])
+        bb_habitat = th.tensor(
+            [[bb.min[0], bb.min[1], bb.min[2]], [bb.max[0], bb.max[1], bb.max[2]]]
+        )
         bb_std = habitat_to_std(bb_habitat, None)[0]
-        bb_std = bb_std.sort(dim=0)[0] # flips coords so min < max
+        bb_std = bb_std.sort(dim=0)[0]  # flips coords so min < max
 
-        xs = np.arange(bb_std[0,0], bb_std[1,0]+grid_resolution, grid_resolution)
-        ys = np.arange(bb_std[0,1], bb_std[1,1]+grid_resolution, grid_resolution)
-        zs = np.arange(bb_std[0,2], bb_std[1,2]+grid_resolution, grid_resolution)
-        X, Y, Z = np.meshgrid(xs, ys, zs, indexing='ij')
+        xs = np.arange(bb_std[0, 0], bb_std[1, 0] + grid_resolution, grid_resolution)
+        ys = np.arange(bb_std[0, 1], bb_std[1, 1] + grid_resolution, grid_resolution)
+        zs = np.arange(bb_std[0, 2], bb_std[1, 2] + grid_resolution, grid_resolution)
+        X, Y, Z = np.meshgrid(xs, ys, zs, indexing="ij")
 
         # batched closest point queries
         pts = th.from_numpy(np.stack([X, Y, Z], axis=-1).reshape(-1, 3)).float()
@@ -1078,31 +1246,45 @@ class SceneManager:
             pts=pts_habitat,
             max_search_radius=grid_resolution,
             num_threads=-1,
-            print_threads=True
-        ) 
+            print_threads=True,
+        )
         closest_pts_habitat = np.array([record.hit_pos for record in col_records])
         hit_dist = np.linalg.norm(closest_pts_habitat - pts_habitat, axis=1)
         obs_dists = hit_dist.reshape(*X.shape)
         occupancy = obs_dists < grid_resolution
 
-        target_ijk = (int((target[0].item()-bb_std[0,0])//grid_resolution),
-                      int((target[1].item()-bb_std[0,1])//grid_resolution),
-                      int((target[2].item()-bb_std[0,2])//grid_resolution))
-        assert target_ijk[0] >= 0 and target_ijk[1] >= 0 and target_ijk[2] >= 0, "invalid target point given"
+        target_ijk = (
+            int((target[0].item() - bb_std[0, 0]) // grid_resolution),
+            int((target[1].item() - bb_std[0, 1]) // grid_resolution),
+            int((target[2].item() - bb_std[0, 2]) // grid_resolution),
+        )
+        assert target_ijk[0] >= 0 and target_ijk[1] >= 0 and target_ijk[2] >= 0, (
+            "invalid target point given"
+        )
         costs = self.fmm_3d(occupancy, target_ijk, grid_resolution)
         gradients = self.calculate_gradient(costs, grid_resolution)
 
         scene_path = self.scene_paths[scene_id]
-        rel_path = os.path.dirname(os.path.relpath(scene_path, self.dataset_path).replace("configs", "geodesics"))
+        rel_path = os.path.dirname(
+            os.path.relpath(scene_path, self.dataset_path).replace(
+                "configs", "geodesics"
+            )
+        )
         filename = os.path.basename(scene_path).split(".")[0] + ".npz"
         rel_geodesic_path = os.path.join(rel_path, filename)
         abs_geodesic_path = os.path.join(self.dataset_path, rel_geodesic_path)
         os.makedirs(os.path.dirname(abs_geodesic_path), exist_ok=True)
 
         colorlog.log.info(f"Saved geodesics to {abs_geodesic_path}")
-        np.savez(abs_geodesic_path, occupancy=occupancy, target=target_ijk,
-        costs=costs, gradients=gradients, grid_resolution=grid_resolution,
-        bb_std=bb_std)
+        np.savez(
+            abs_geodesic_path,
+            occupancy=occupancy,
+            target=target_ijk,
+            costs=costs,
+            gradients=gradients,
+            grid_resolution=grid_resolution,
+            bb_std=bb_std,
+        )
 
         # modify scene_instance.json to add geodesic_path
         with open(scene_path, "r") as f:
@@ -1131,7 +1313,7 @@ class SceneManager:
         grid = th.as_tensor(grid, device=coords.device)
 
         # Clamp to valid range
-        _max = th.tensor([X-1.001, Y-1.001, Z-1.001], device=coords.device)
+        _max = th.tensor([X - 1.001, Y - 1.001, Z - 1.001], device=coords.device)
         coords_clamped = th.clamp(coords, min=th.zeros(3), max=_max)
 
         x, y, z = coords_clamped.unbind(1)
@@ -1153,7 +1335,7 @@ class SceneManager:
         def gather(z_idx, y_idx, x_idx):
             return grid[x_idx, y_idx, z_idx]
 
-        #cZYX
+        # cZYX
         c000 = gather(z0, y0, x0)
         c001 = gather(z0, y0, x1)
         c010 = gather(z0, y1, x0)
@@ -1176,7 +1358,6 @@ class SceneManager:
         # interpolate at dz coord to get c
         c = c0 * (1 - dz) + c1 * dz
         return c
-        
 
     def interpolate_geodesic(self, scene_id, pts, gradient=True):
         geodesic = self.geodesics[scene_id]
@@ -1188,7 +1369,7 @@ class SceneManager:
             grid = geodesic["costs"].unsqueeze(-1)
 
         # Print out-of-bounds coords
-        below_min = pts < bb_std[0] # shape (N, 3)
+        below_min = pts < bb_std[0]  # shape (N, 3)
         above_max = pts > bb_std[1]
         out_of_bounds = below_min | above_max  # shape (N, 3)
         for i in range(pts.shape[0]):
@@ -1203,7 +1384,6 @@ class SceneManager:
 
         # trilinear interpolation
         return self.trilinear_interpolate(grid, inds)
-
 
     @property
     def is_out_bounds(self):

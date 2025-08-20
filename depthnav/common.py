@@ -5,16 +5,21 @@ from typing import Optional, Tuple, List
 from scipy.spatial.transform import Rotation as Rotation
 from enum import Enum
 
-class ExitCode(Enum):
-    SUCCESS=0
-    ERROR=1
-    EARLY_STOP=2
-    NOT_FOUND=3
-    TIMEOUT=4
-    KEYBOARD_INTERRUPT=5
 
-def std_to_habitat(std_pos: Optional[torch.Tensor] = None, std_ori: Optional[torch.Tensor] = None, format="enu") \
-        -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+class ExitCode(Enum):
+    SUCCESS = 0
+    ERROR = 1
+    EARLY_STOP = 2
+    NOT_FOUND = 3
+    TIMEOUT = 4
+    KEYBOARD_INTERRUPT = 5
+
+
+def std_to_habitat(
+    std_pos: Optional[torch.Tensor] = None,
+    std_ori: Optional[torch.Tensor] = None,
+    format="enu",
+) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
     """_summary_
         axes transformation, from std to habitat-sim
 
@@ -32,30 +37,32 @@ def std_to_habitat(std_pos: Optional[torch.Tensor] = None, std_ori: Optional[tor
         hab_ori = None
     else:
         hab_ori = std_ori.clone().detach().cpu().numpy() @ np.array(
-            [[1, 0, 0, 0],
-             [0, 0, 0, -1],
-             [0, -1, 0, 0],
-             [0, 0, 1, 0]]
+            [[1, 0, 0, 0], [0, 0, 0, -1], [0, -1, 0, 0], [0, 0, 1, 0]]
         )
 
     if std_pos is None:
         hab_pos = None
     else:
-
         if len(std_pos.shape) == 1:
-            hab_pos = (std_pos.clone().detach().cpu().unsqueeze(0).numpy() @ np.array([[0, 0, -1],
-                                                                                       [-1, 0, 0],
-                                                                                       [0, 1, 0]])).squeeze()
+            hab_pos = (
+                std_pos.clone().detach().cpu().unsqueeze(0).numpy()
+                @ np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]])
+            ).squeeze()
         elif std_pos.shape[1] == 3:
-            hab_pos = std_pos.clone().detach().cpu().numpy() @ np.array([[0, 0, -1],
-                                                                         [-1, 0, 0],
-                                                                         [0, 1, 0]])
+            hab_pos = std_pos.clone().detach().cpu().numpy() @ np.array(
+                [[0, 0, -1], [-1, 0, 0], [0, 1, 0]]
+            )
         else:
             raise ValueError("std_pos shape error")
 
     return hab_pos, hab_ori
 
-def habitat_to_std(habitat_pos: Optional[np.ndarray] = None, habitat_ori: Optional[np.ndarray] = None, format="enu"):
+
+def habitat_to_std(
+    habitat_pos: Optional[np.ndarray] = None,
+    habitat_ori: Optional[np.ndarray] = None,
+    format="enu",
+):
     """_summary_
         axes transformation, from habitat-sim to std
 
@@ -75,10 +82,9 @@ def habitat_to_std(habitat_pos: Optional[np.ndarray] = None, habitat_ori: Option
     else:
         # assert habitat_pos.shape[1] == 3
         std_pos = th.as_tensor(
-            np.atleast_2d(habitat_pos) @ np.array([[0, -1, 0],
-                                                   [0, 0, 1],
-                                                   [-1, 0, 0]])
-            , dtype=th.float32)
+            np.atleast_2d(habitat_pos) @ np.array([[0, -1, 0], [0, 0, 1], [-1, 0, 0]]),
+            dtype=th.float32,
+        )
         # if len(habitat_pos.shape) == 1:
         #     std_pos = habitat_pos
 
@@ -87,12 +93,8 @@ def habitat_to_std(habitat_pos: Optional[np.ndarray] = None, habitat_ori: Option
     else:
         # assert habitat_ori.shape[1] == 4
         std_ori = th.from_numpy(
-            np.atleast_2d(habitat_ori) @ np.array(
-                [[1, 0, 0, 0],
-                 [0, 0, -1, 0],
-                 [0, 0, 0, 1],
-                 [0, -1, 0, 0]]
-            )
+            np.atleast_2d(habitat_ori)
+            @ np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1], [0, -1, 0, 0]])
         )
     return std_pos, std_ori
 
@@ -108,11 +110,13 @@ def obs_list2array(obs_dict: List, row: int, column: int):
         obs_array.append(np.hstack(obs_row))
     return np.vstack(obs_array)
 
+
 def rgba2rgb(image):
     if isinstance(image, List):
         return [rgba2rgb(img) for img in image]
     else:
         return image[:, :, :3]
+
 
 def observation_to_device(obs, device):
     return {k: v.to(device) for k, v in obs.items()}

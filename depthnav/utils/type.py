@@ -4,14 +4,16 @@ from typing import Union, Any
 from enum import Enum
 import numpy as np
 
+
 class Uniform:
     mean: Union[float, th.Tensor] = 0
     half: Union[float, th.Tensor] = 0
 
     def __init__(
-            self,
-            mean,
-            half, ):
+        self,
+        mean,
+        half,
+    ):
         self.mean = th.as_tensor(mean)
         self.half = th.as_tensor(half)
 
@@ -29,9 +31,10 @@ class Normal:
     std: Union[float, th.Tensor] = 0
 
     def __init__(
-            self,
-            mean,
-            std, ):
+        self,
+        mean,
+        std,
+    ):
         self.mean = th.as_tensor(mean)
         self.std = th.as_tensor(std)
 
@@ -49,9 +52,10 @@ class Cylinder:
     half: Union[float, th.Tensor] = 0
 
     def __init__(
-            self,
-            mean,
-            half, ):
+        self,
+        mean,
+        half,
+    ):
         self.mean = th.as_tensor(mean)
         self.half = th.as_tensor(half)
 
@@ -63,7 +67,7 @@ class Cylinder:
     def generate(self, size, generator=None):
         if type(size) == tuple:
             n = size[0] if type(size) == tuple else size.shape[0]
-        theta = 2. * th.pi * th.rand(n, generator=generator)
+        theta = 2.0 * th.pi * th.rand(n, generator=generator)
         x = self.half[0] * th.cos(theta)
         y = self.half[1] * th.sin(theta)
         z = self.half[2] * th.rand(n) - 0.5
@@ -125,4 +129,3 @@ class TensorDict(dict):
         for key, value in self.items():
             self[key] = value.to(device)
         return self
-

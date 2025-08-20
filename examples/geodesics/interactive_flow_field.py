@@ -25,9 +25,11 @@ opacity = 1.0
 cyan = mn.Color4(0.0, 0.5, 1.0, opacity)
 orange = mn.Color4(1.0, 1.0, 0.0, opacity)
 
+
 def color_consequence(color1=orange, color2=cyan, factor=1):
-    factor = np.array(factor).clip(min=0.,max=1.)
-    return color1*(1-factor)+factor*color2
+    factor = np.array(factor).clip(min=0.0, max=1.0)
+    return color1 * (1 - factor) + factor * color2
+
 
 class FlowFieldInteractiveViewer(HabitatSimInteractiveViewer):
     def __init__(self, sim_settings, env_config):
@@ -37,14 +39,14 @@ class FlowFieldInteractiveViewer(HabitatSimInteractiveViewer):
     def reset_agent(self):
         agent = self.sim.get_agent(0)
 
-        # set position 
+        # set position
         pos = std_to_habitat(th.tensor([-1.5, 0.0, 20.0]), None)[0]
         # agent_node.translation = pos
 
         # set orientation
-        r_scipy = R.from_euler('y', 90, degrees=True)
+        r_scipy = R.from_euler("y", 90, degrees=True)
         quat = r_scipy.as_quat()
-        quat = np.roll(quat, 1) # reorder from (x, y, z, w) -> (w, x, y, z)
+        quat = np.roll(quat, 1)  # reorder from (x, y, z, w) -> (w, x, y, z)
         hab_quat = std_to_habitat(None, th.as_tensor(quat))[1]
 
         # Create agent state
@@ -54,7 +56,6 @@ class FlowFieldInteractiveViewer(HabitatSimInteractiveViewer):
         agent.set_state(state)
         print("Set starting state")
 
-    
     def reconfigure_sim(self):
         super().reconfigure_sim()
 
@@ -63,7 +64,9 @@ class FlowFieldInteractiveViewer(HabitatSimInteractiveViewer):
         cur_scene = self.sim_settings["scene"]
         scene_handles = md.get_scene_handles()
         try:
-            cur_scene_path = [handle for handle in scene_handles if cur_scene in handle][0]
+            cur_scene_path = [
+                handle for handle in scene_handles if cur_scene in handle
+            ][0]
             cur_scene_path = os.path.abspath(cur_scene_path)
         except:
             raise ValueError(f"Scene: '{cur_scene}' not found in dataset")
@@ -78,7 +81,7 @@ class FlowFieldInteractiveViewer(HabitatSimInteractiveViewer):
         self.trails = generate_flow_trails(env, env.position, length=150, step_size=0.1)
         self.target = std_to_habitat(env.target[0], None)[0]
         env.close()
-        
+
         # set starting position
         self.reset_agent()
 
@@ -95,15 +98,14 @@ class FlowFieldInteractiveViewer(HabitatSimInteractiveViewer):
         for line_id in range(len(self.trails)):
             for j in range(len(self.trails[line_id]) - 1):
                 start = self.trails[line_id][j]
-                end = self.trails[line_id][j+1]
+                end = self.trails[line_id][j + 1]
                 factor = j / len(self.trails[line_id])
                 color = color_consequence(orange, cyan, factor)
                 debug_line_render.draw_transformed_line(start, end, color)
-        
+
         # draw target as circle
-        debug_line_render.draw_circle(
-            mn.Vector3(self.target), radius=0.25, color=cyan
-        )
+        debug_line_render.draw_circle(mn.Vector3(self.target), radius=0.25, color=cyan)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -113,7 +115,7 @@ def parse_args():
         "--scene",
         default="configs/ring_level3/ring_level3_5",
         type=str,
-        help='scene/stage file to load',
+        help="scene/stage file to load",
     )
     parser.add_argument(
         "--dataset",
@@ -134,11 +136,11 @@ def parse_args():
         type=int,
         help="Vertical resolution of the window.",
     )
-    parser.add_argument('--cfg_file', type=str,
-        default='examples/navigation/train_cfg/nav_ring.yaml'
+    parser.add_argument(
+        "--cfg_file", type=str, default="examples/navigation/train_cfg/nav_ring.yaml"
     )
     args = parser.parse_args()
-    
+
     if args.width < 1:
         parser.error("width must be a positive non-zero integer.")
     if args.height < 1:
@@ -146,21 +148,22 @@ def parse_args():
 
     return args
 
-def generate_flow_trails(env, points, length=100, step_size=0.2):
 
+def generate_flow_trails(env, points, length=100, step_size=0.2):
     # move points along gradient field and record the trails
     trails = th.zeros((len(points), length, 3))
-    trails[:,0] = points
+    trails[:, 0] = points
     for i in range(1, length):
-        gradient = env.geodesic_gradient(trails[:,i-1])
-        trails[:,i] = trails[:,i-1] + step_size * gradient
-    
+        gradient = env.geodesic_gradient(trails[:, i - 1])
+        trails[:, i] = trails[:, i - 1] + step_size * gradient
+
     # convert to habitat coords
     trails_habitat = np.zeros((len(points), length, 3))
     for i in range(len(points)):
         trails_habitat[i] = std_to_habitat(trails[i], None)[0]
 
     return trails_habitat
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -173,7 +176,7 @@ if __name__ == "__main__":
     sim_settings["window_height"] = args.height
     sim_settings["default_agent_navmesh"] = False
 
-    with open(args.cfg_file, 'r') as file:
+    with open(args.cfg_file, "r") as file:
         env_config = yaml.safe_load(file)
 
     # setup env config
@@ -183,6 +186,5 @@ if __name__ == "__main__":
     env_config["env"]["single_env"] = True
     env_config["env"]["scene_kwargs"]["load_geodesics"] = True
 
-    
     # start the application
     FlowFieldInteractiveViewer(sim_settings, env_config).exec()

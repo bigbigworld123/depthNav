@@ -13,7 +13,7 @@ class AccelerationBoundedYaw(nn.Module):
         super().__init__()
         self.min_yaw = min_yaw
         self.max_yaw = max_yaw
-    
+
     def forward(self, z):
         acc = z[:, 0:3]
         yaw = z[:, 3]
@@ -21,6 +21,7 @@ class AccelerationBoundedYaw(nn.Module):
         bounded_yaw = self.min_yaw + (self.max_yaw - self.min_yaw) * th.sigmoid(yaw)
         acc_bounded_yaw = th.cat([acc, bounded_yaw.unsqueeze(1)], dim=1)
         return acc_bounded_yaw
+
 
 class MlpPolicy(nn.Module):
     activation_fn_alias = {
@@ -45,7 +46,7 @@ class MlpPolicy(nn.Module):
         activation_fn: Union[str, nn.Module],
         output_activation_fn: Union[str, nn.Module],
         output_activation_kwargs: Dict = None,
-        device: th.device = "cpu"
+        device: th.device = "cpu",
     ):
         super().__init__()
 
@@ -53,7 +54,7 @@ class MlpPolicy(nn.Module):
             activation_fn = self.activation_fn_alias[activation_fn]
         if isinstance(output_activation_fn, str):
             output_activation_fn = self.output_activation_fn_alias[output_activation_fn]
-        
+
         self.in_dim = in_dim
         self.activation_fn = activation_fn
         self.output_activation_fn = output_activation_fn
@@ -76,8 +77,13 @@ class MlpPolicy(nn.Module):
             if i < len(pi_layers_dims) - 1:
                 policy_net.append(self.activation_fn())
             else:
-                assert not (type(self.output_activation_fn) == nn.Identity and len(self.output_activation_kwargs) > 0)
-                policy_net.append(self.output_activation_fn(**self.output_activation_kwargs))
+                assert not (
+                    type(self.output_activation_fn) == nn.Identity
+                    and len(self.output_activation_kwargs) > 0
+                )
+                policy_net.append(
+                    self.output_activation_fn(**self.output_activation_kwargs)
+                )
             last_layer_dim_pi = curr_layer_dim
 
         self.out_dim = last_layer_dim_pi

@@ -4,10 +4,16 @@ from typing import Type, Optional, Dict, Any, Union, List
 from gymnasium import spaces
 
 from .extractors import (
-    FeatureExtractor, FlattenExtractor, StateExtractor, StateTargetExtractor, 
-    ImageExtractor, StateImageExtractor, StateTargetImageExtractor,
+    FeatureExtractor,
+    FlattenExtractor,
+    StateExtractor,
+    StateTargetExtractor,
+    ImageExtractor,
+    StateImageExtractor,
+    StateTargetImageExtractor,
 )
 from .mlp_policy import MlpPolicy
+
 
 class LayerNormGRUCell(nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -35,6 +41,7 @@ class MultiInputPolicy(MlpPolicy):
     """
     Builds an actor policy network with specifications from a dictionary.
     """
+
     feature_extractor_alias = {
         # "flatten": FlattenExtractor,
         "StateExtractor": StateExtractor,
@@ -57,10 +64,12 @@ class MultiInputPolicy(MlpPolicy):
         feature_extractor_class: Type[FeatureExtractor],
         output_activation_kwargs: Optional[Dict[str, Any]] = None,
         feature_extractor_kwargs: Optional[Dict[str, Any]] = None,
-        device:th.device = "cuda"
+        device: th.device = "cuda",
     ):
         if isinstance(feature_extractor_class, str):
-            feature_extractor_class = self.feature_extractor_alias[feature_extractor_class]
+            feature_extractor_class = self.feature_extractor_alias[
+                feature_extractor_class
+            ]
         feature_extractor_kwargs = feature_extractor_kwargs or {}
 
         # get the size of features_dim before initializing MlpPolicy
@@ -68,7 +77,7 @@ class MultiInputPolicy(MlpPolicy):
             observation_space, **feature_extractor_kwargs
         )
         feature_norm = nn.LayerNorm(feature_extractor.features_dim)
-        
+
         # add recurrent layer after feature_extractor
         _is_recurrent = False
         if net_arch.get("recurrent", None) is not None:
@@ -80,14 +89,20 @@ class MultiInputPolicy(MlpPolicy):
             if isinstance(rnn_class, str):
                 rnn_class = self.recurrent_alias[rnn_class]
 
-            recurrent_extractor = rnn_class(input_size=feature_extractor.features_dim, **kwargs)
+            recurrent_extractor = rnn_class(
+                input_size=feature_extractor.features_dim, **kwargs
+            )
             in_dim = kwargs.get("hidden_size")
         else:
             in_dim = feature_extractor.features_dim
-        
+
         super().__init__(
-            in_dim, net_arch, activation_fn, output_activation_fn, 
-            output_activation_kwargs, device
+            in_dim,
+            net_arch,
+            activation_fn,
+            output_activation_fn,
+            output_activation_kwargs,
+            device,
         )
 
         self.feature_extractor = feature_extractor
@@ -104,7 +119,6 @@ class MultiInputPolicy(MlpPolicy):
             latent = self.recurrent_extractor(features, latent)
             actions = super().forward(latent)
             return actions, latent
-        
+
         actions = super().forward(features)
         return actions
-    

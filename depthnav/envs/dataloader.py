@@ -3,6 +3,7 @@ import glob
 import os
 from torch.utils.data import Dataset
 
+
 class SimpleDataLoader:
     def __init__(self, dataset, batch_size=1, shuffle=False):
         self.paths = dataset.paths
@@ -19,11 +20,17 @@ class SimpleDataLoader:
     def _create_iter_index(self):
         self._select_index = list(range(self.len))
         random.shuffle(self._select_index) if self.shuffle else None
-        self._batches_num = self.len // self.batch_size + (self.len % self.batch_size != 0)
+        self._batches_num = self.len // self.batch_size + (
+            self.len % self.batch_size != 0
+        )
         self._select_index_batches = []
         for index in range(self._batches_num):
             start = self.batch_size * index
-            end = self.batch_size * (index + 1) if self.batch_size * (index + 1) <= self.len else None
+            end = (
+                self.batch_size * (index + 1)
+                if self.batch_size * (index + 1) <= self.len
+                else None
+            )
             self._select_index_batches.append(self._select_index[start:end])
 
     def __iter__(self):
@@ -43,6 +50,7 @@ class SimpleDataLoader:
     def _reset(self):
         self._current_batch_index = 0
 
+
 class ChildrenPathDataset(Dataset):
     def __init__(self, root_path):
         self.root_path = root_path
@@ -60,8 +68,11 @@ class ChildrenPathDataset(Dataset):
             basename = os.path.basename(self.root_path)
             directory = os.path.dirname(self.root_path)
             file_paths = os.listdir(directory)
-            glb_files = [os.path.join(directory, filename) 
-                         for filename in file_paths if basename in filename]
+            glb_files = [
+                os.path.join(directory, filename)
+                for filename in file_paths
+                if basename in filename
+            ]
 
         glb_files = sorted(glb_files)
         return glb_files

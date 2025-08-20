@@ -1,7 +1,6 @@
 from depthnav.scripts.runner import run_experiment
 
 if __name__ == "__main__":
-
     config_keys = (
         "env.scene_kwargs.load_geodesics",
         "env.scene_kwargs.path",
@@ -16,7 +15,7 @@ if __name__ == "__main__":
         "level3_small_safe_yaw": (True, "configs/level_3", 10000),
         "level4_small_safe_yaw": (True, "configs/level_4", 10000),
     }
-    base_config_files=[
+    base_config_files = [
         "examples/navigation/train_cfg/nav_empty.yaml",
         "examples/navigation/train_cfg/nav_levelX.yaml",
         "examples/navigation/train_cfg/nav_levelX.yaml",

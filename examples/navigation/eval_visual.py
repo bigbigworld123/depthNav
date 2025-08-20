@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import faulthandler
+
 faulthandler.enable()
 
 import os
@@ -13,6 +14,7 @@ import argparse
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from pylogtools import timerlog
+
 timerlog.timer.print_logs(False)
 
 from depthnav.envs.env_aliases import env_aliases
@@ -21,12 +23,13 @@ from depthnav.policies.multi_input_policy import MultiInputPolicy
 from depthnav.common import observation_to_device
 from depthnav.common import std_to_habitat, obs_list2array, rgba2rgb
 
+
 def main(args):
-    with open(args.cfg_file, 'r') as file:
+    with open(args.cfg_file, "r") as file:
         config = yaml.safe_load(file)
 
     if args.policy_cfg_file:
-        with open(args.policy_cfg_file, 'r') as file:
+        with open(args.policy_cfg_file, "r") as file:
             policy_config = yaml.safe_load(file)
         config.update(policy_config)
 
@@ -62,7 +65,6 @@ def main(args):
     policy.load(args.weight)
     policy.eval()
 
-
     def create_name(run_path):
         index = 1
         while True:
@@ -71,6 +73,7 @@ def main(args):
                 break
             index += 1
         return path
+
     if args.save_name is None:
         save_name = create_name(args.weight.split(".")[0] + "_eval")
 
@@ -78,29 +81,29 @@ def main(args):
         env=env,
         policy=policy,
         save_name=save_name,
-        save=True, 
-        show=args.render, 
+        save=True,
+        show=args.render,
         render_kwargs=render_kwargs,
         res=args.res,
         plot=args.plot,
-        num_cols=args.num_envs
+        num_cols=args.num_envs,
     )
     evaluate.run_rollouts(args.num_rollouts)
 
 
 class Evaluate:
     def __init__(
-        self, 
+        self,
         env,
         policy,
-        save_name, 
+        save_name,
         save,
         show=True,
         render_kwargs={},
-        res = 512,
-        num_rows = 1,
-        num_cols = 4,
-        plot=False
+        res=512,
+        num_rows=1,
+        num_cols=4,
+        plot=False,
     ):
         """
         renders the first num_cols * num_rows environments
@@ -119,7 +122,7 @@ class Evaluate:
         self.num_cols = num_cols
         self.plot = plot
 
-        self.render_grid = np.zeros((num_rows*res, num_cols*res, 3), dtype=np.uint8)
+        self.render_grid = np.zeros((num_rows * res, num_cols * res, 3), dtype=np.uint8)
         self.collided = th.zeros(self.env.num_envs, dtype=th.bool)
         self.first_collision = th.zeros(self.env.num_envs, dtype=th.bool)
         self.done = th.zeros(self.env.num_envs, dtype=th.bool)
@@ -130,21 +133,25 @@ class Evaluate:
         for _ in range(num_rollouts):
             self.env.reset()
             # add start and target position to render_kwargs
-            self.render_kwargs["points"] = th.cat([self.env.position.unsqueeze(1), self.env.target.unsqueeze(1)], dim=1) # (B, 2, 3)
+            self.render_kwargs["points"] = th.cat(
+                [self.env.position.unsqueeze(1), self.env.target.unsqueeze(1)], dim=1
+            )  # (B, 2, 3)
             self.single_rollout()
-        
+
         if self.save:
             self.save_video()
         self.env.close()
         cv2.destroyAllWindows()
-    
+
     def save_video(self):
         print("Processing video")
         fps = int(1.0 / self.env.dynamics.ctrl_dt)
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # Codec for MP4
         video_width = self.num_cols * self.res
         video_height = self.num_rows * self.res
-        out = cv2.VideoWriter(f"{self.save_name}.mp4", fourcc, fps, (video_width, video_height))
+        out = cv2.VideoWriter(
+            f"{self.save_name}.mp4", fourcc, fps, (video_width, video_height)
+        )
         for img in self.all_frames:
             out.write(img)
         out.release()
@@ -152,7 +159,9 @@ class Evaluate:
 
     @th.no_grad()
     def single_rollout(self):
-        self.render_grid = np.zeros((self.num_rows*self.res, self.num_cols*self.res, 3), dtype=np.uint8)
+        self.render_grid = np.zeros(
+            (self.num_rows * self.res, self.num_cols * self.res, 3), dtype=np.uint8
+        )
         self.collided = th.zeros(self.env.num_envs, dtype=th.bool)
         self.first_collision = th.zeros(self.env.num_envs, dtype=th.bool)
         self.done = th.zeros(self.env.num_envs, dtype=th.bool)
@@ -163,7 +172,9 @@ class Evaluate:
         obs_quaternions = th.zeros((self.env.num_envs, self.env.max_episode_steps, 4))
         velocities = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
         obs_velocities = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
-        moving_avg_velocities = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
+        moving_avg_velocities = th.zeros(
+            (self.env.num_envs, self.env.max_episode_steps, 3)
+        )
         accelerations = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
         jerks = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
         actions = None
@@ -172,7 +183,9 @@ class Evaluate:
         target_vel = th.zeros((self.env.num_envs, self.env.max_episode_steps))
         loss_metrics = [{} for _ in range(self.env.num_envs)]
 
-        latent_state = th.zeros((self.env.num_envs, self.policy.latent_dim), device=self.policy.device)
+        latent_state = th.zeros(
+            (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
+        )
         i = 0
         while True:
             start = time.time()
@@ -189,15 +202,17 @@ class Evaluate:
             self.collided = self.collided | self.env.is_collision
 
             if self.show or self.save_video:
-                render_list = rgba2rgb(self.env.scene_manager.render(**self.render_kwargs))
+                render_list = rgba2rgb(
+                    self.env.scene_manager.render(**self.render_kwargs)
+                )
                 self.render(render_list, obs, terminated)
-                
+
                 if self.show:
                     cv2.imshow("render cams", self.render_grid)
                     elapsed = time.time() - start
                     wait_ms = max(int(1000 * (self.env.dynamics.ctrl_dt - elapsed)), 1)
                     cv2.waitKey(wait_ms)
-        
+
             for j in range(self.env.num_envs):
                 if terminated[j]:
                     continue
@@ -208,59 +223,126 @@ class Evaluate:
             positions[~terminated, i] = self.env.position[~terminated]
             velocities[~terminated, i] = self.env.velocity[~terminated]
             quaternions[~terminated, i] = self.env.quaternion_sb[~terminated]
-            obs_velocities[~terminated, i] = obs["state"][~terminated,-3:]
-            obs_quaternions[~terminated, i] = obs["state"][~terminated,:4]
-            moving_avg_velocities[~terminated, i] = self.env.moving_average_velocity[~terminated]
+            obs_velocities[~terminated, i] = obs["state"][~terminated, -3:]
+            obs_quaternions[~terminated, i] = obs["state"][~terminated, :4]
+            moving_avg_velocities[~terminated, i] = self.env.moving_average_velocity[
+                ~terminated
+            ]
             accelerations[~terminated, i] = self.env.acceleration[~terminated]
             jerks[~terminated, i] = self.env.jerk[~terminated]
             if actions is None:
-                actions = th.zeros((self.env.num_envs, self.env.max_episode_steps, action.shape[1]))
+                actions = th.zeros(
+                    (self.env.num_envs, self.env.max_episode_steps, action.shape[1])
+                )
             actions[~terminated, i] = action[~terminated].cpu()
-            target_dist[~terminated, i] = th.norm(self.env.target - self.env.position, dim=1)[~terminated]
-            target_vel[~terminated, i] = self.env.target_velocity.norm(dim=1)[~terminated] # obs["target"].norm(dim=1)[~terminated]
+            target_dist[~terminated, i] = th.norm(
+                self.env.target - self.env.position, dim=1
+            )[~terminated]
+            target_vel[~terminated, i] = self.env.target_velocity.norm(dim=1)[
+                ~terminated
+            ]  # obs["target"].norm(dim=1)[~terminated]
             terminations[:, i] = terminated
 
             i += 1
             if terminated.all():
                 break
-        
+
         if self.plot:
             t = th.arange(0, self.env.max_episode_steps) * self.env.dynamics.ctrl_dt
             colors = ["blue", "orange", "red", "green"]
-            fig, axs = plt.subplots(nrows=7, ncols=1, sharex=True, figsize=(8,10))
+            fig, axs = plt.subplots(nrows=7, ncols=1, sharex=True, figsize=(8, 10))
 
             for j in range(self.env.num_envs):
                 terminated_idx = th.nonzero(terminations[j], as_tuple=True)[0]
                 end = terminated_idx[0].item()
 
-                axs[0].plot(t[:end], target_dist[j, :end], label=f"target dist agent {j}", color=colors[j])#, linestyle="dotted")
-                axs[0].plot(t[:end], target_vel[j, :end], label=f"target vel agent {j}", linestyle="dashed")#, color=colors[j])
+                axs[0].plot(
+                    t[:end],
+                    target_dist[j, :end],
+                    label=f"target dist agent {j}",
+                    color=colors[j],
+                )  # , linestyle="dotted")
+                axs[0].plot(
+                    t[:end],
+                    target_vel[j, :end],
+                    label=f"target vel agent {j}",
+                    linestyle="dashed",
+                )  # , color=colors[j])
 
-                axs[1].plot(t[:end], velocities[j, :end].norm(dim=1), label=f"vel agent {j}")#, color=colors[j])
-                axs[1].plot(t[:end], obs_velocities[j, :end].norm(dim=1), label=f"obs vel agent {j}")#, color=colors[j])
-                axs[1].plot(t[:end], moving_avg_velocities[j, :end].norm(dim=1), label=f"mvg avg agent {j}", linestyle="dotted")#, color=colors[j])
-                axs[1].plot(t[:end], target_vel[j, :end], label=f"target vel agent {j}", linestyle="dashed")#, color=colors[j])
+                axs[1].plot(
+                    t[:end], velocities[j, :end].norm(dim=1), label=f"vel agent {j}"
+                )  # , color=colors[j])
+                axs[1].plot(
+                    t[:end],
+                    obs_velocities[j, :end].norm(dim=1),
+                    label=f"obs vel agent {j}",
+                )  # , color=colors[j])
+                axs[1].plot(
+                    t[:end],
+                    moving_avg_velocities[j, :end].norm(dim=1),
+                    label=f"mvg avg agent {j}",
+                    linestyle="dotted",
+                )  # , color=colors[j])
+                axs[1].plot(
+                    t[:end],
+                    target_vel[j, :end],
+                    label=f"target vel agent {j}",
+                    linestyle="dashed",
+                )  # , color=colors[j])
 
-                axs[2].plot(t[:end], accelerations[j, :end].norm(dim=1), label=f"accel agent {j}")#, color=colors[j])
+                axs[2].plot(
+                    t[:end],
+                    accelerations[j, :end].norm(dim=1),
+                    label=f"accel agent {j}",
+                )  # , color=colors[j])
                 if actions.shape[-1] == 4:
-                    axs[2].scatter(t[:end], actions[j, :end, 3], label=f"yaw agent {j}", s=2)#, color=colors[j]
-                    axs[2].plot(t[:end], actions[j, :end, :3].norm(dim=1), label=f"thrust agent {j}", linestyle="dotted")#, color=colors[j]
+                    axs[2].scatter(
+                        t[:end], actions[j, :end, 3], label=f"yaw agent {j}", s=2
+                    )  # , color=colors[j]
+                    axs[2].plot(
+                        t[:end],
+                        actions[j, :end, :3].norm(dim=1),
+                        label=f"thrust agent {j}",
+                        linestyle="dotted",
+                    )  # , color=colors[j]
                 else:
-                    axs[2].plot(t[:end], actions[j, :end].norm(dim=1), label=f"thrust agent {j}", linestyle="dotted")#, color=colors[j]
+                    axs[2].plot(
+                        t[:end],
+                        actions[j, :end].norm(dim=1),
+                        label=f"thrust agent {j}",
+                        linestyle="dotted",
+                    )  # , color=colors[j]
 
-                axs[3].plot(t[:end], jerks[j, :end].norm(dim=1), label=f"jerk agent {j}")#, color=colors[j])
+                axs[3].plot(
+                    t[:end], jerks[j, :end].norm(dim=1), label=f"jerk agent {j}"
+                )  # , color=colors[j])
 
                 lines = ["solid", "dashed", "dotted", "dashdot"]
                 for itr, (metric, values) in enumerate(loss_metrics[j].items()):
                     values = values.numpy()
-                    axs[4].plot(t[:end], values[:end], label=f"{metric} agent {j}", linestyle=lines[itr % len(lines)])#, color=colors[j])
+                    axs[4].plot(
+                        t[:end],
+                        values[:end],
+                        label=f"{metric} agent {j}",
+                        linestyle=lines[itr % len(lines)],
+                    )  # , color=colors[j])
 
                     d_values = np.diff(values[:end])
-                    axs[5].plot(t[:end-1], d_values, label=f"{metric} agent {j}", linestyle=lines[itr % len(lines)])#, color=colors[j])
-                
+                    axs[5].plot(
+                        t[: end - 1],
+                        d_values,
+                        label=f"{metric} agent {j}",
+                        linestyle=lines[itr % len(lines)],
+                    )  # , color=colors[j])
 
-                axs[6].plot(t[:end], quaternions[j, :end], label=f"quaternions agent {j}")#, color=colors[j])
-                axs[6].plot(t[:end], obs_quaternions[j, :end], label=f"obs quaternions agent {j}")#, color=colors[j])
+                axs[6].plot(
+                    t[:end], quaternions[j, :end], label=f"quaternions agent {j}"
+                )  # , color=colors[j])
+                axs[6].plot(
+                    t[:end],
+                    obs_quaternions[j, :end],
+                    label=f"obs quaternions agent {j}",
+                )  # , color=colors[j])
 
             axs[0].set_ylabel("Target distance ($m$)")
             axs[1].set_ylabel("Velocity ($m/s$)")
@@ -268,12 +350,12 @@ class Evaluate:
             axs[3].set_ylabel("Jerk ($m/s^3$)")
             axs[4].set_ylabel("Loss terms")
             axs[5].set_ylabel("Change in loss")
-            axs[0].legend(loc='center left', bbox_to_anchor=(1.05, 0.5))
-            axs[1].legend(loc='center left', bbox_to_anchor=(1.05, 0.5))
-            axs[2].legend(loc='center left', bbox_to_anchor=(1.05, 0.5))
-            axs[3].legend(loc='center left', bbox_to_anchor=(1.05, 0.5))
-            axs[4].legend(loc='center left', bbox_to_anchor=(1.05, 0.5))
-            axs[5].legend(loc='center left', bbox_to_anchor=(1.05, 0.5))
+            axs[0].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
+            axs[1].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
+            axs[2].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
+            axs[3].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
+            axs[4].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
+            axs[5].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
 
             lambda_a = self.env.reward_kwargs["lambda_a"]
             lambda_j = self.env.reward_kwargs["lambda_j"]
@@ -281,9 +363,11 @@ class Evaluate:
             # lambda_a = 0.01
             # lambda_j = 0.001
             lambda_vmax = 1.0
-            axs[0].set_title(f"$\lambda_a = {lambda_a}$, $\lambda_j = {lambda_j}$, $\lambda_{{vmax}} = {lambda_vmax}$")
+            axs[0].set_title(
+                f"$\lambda_a = {lambda_a}$, $\lambda_j = {lambda_j}$, $\lambda_{{vmax}} = {lambda_vmax}$"
+            )
             axs[-1].set_xlabel("Time ($s$)")
-        
+
             axs[0].grid()
             axs[1].grid()
             axs[2].grid()
@@ -291,9 +375,9 @@ class Evaluate:
             axs[4].grid()
             axs[5].grid()
 
-            # adjust to make space for legends 
+            # adjust to make space for legends
             plt.tight_layout()
-            plt.subplots_adjust(right=0.7) # adds space on right
+            plt.subplots_adjust(right=0.7)  # adds space on right
             plt.show()
 
     def _preprocess_depth(self, depth: th.Tensor):
@@ -311,8 +395,8 @@ class Evaluate:
         return inv_depth
 
     def render(self, render_list, observations, dones):
-        obs_list = th.split(observations["depth"], 1, dim=0) # (B, C, H, W)
-        obs_list = [obs.squeeze(0).permute(1,2,0).cpu().numpy() for obs in obs_list]
+        obs_list = th.split(observations["depth"], 1, dim=0)  # (B, C, H, W)
+        obs_list = [obs.squeeze(0).permute(1, 2, 0).cpu().numpy() for obs in obs_list]
         for i, (render, depth, done) in enumerate(zip(render_list, obs_list, dones)):
             row = i // self.num_cols
             col = i % self.num_cols
@@ -335,52 +419,62 @@ class Evaluate:
                 top = depth.shape[0] * 2
                 img = self.inset_image(render, obs, inset_scale=2, top=top)
                 img = self.tint_red(img)
-                self.render_grid[row*self.res:(row+1)*self.res, 
-                            col*self.res:(col+1)*self.res] = img
+                self.render_grid[
+                    row * self.res : (row + 1) * self.res,
+                    col * self.res : (col + 1) * self.res,
+                ] = img
 
             if not done:
                 img = self.inset_image(render, depth, inset_scale=2)
                 top = depth.shape[0] * 2
                 img = self.inset_image(render, obs, inset_scale=2, top=top)
-                self.render_grid[row*self.res:(row+1)*self.res, 
-                            col*self.res:(col+1)*self.res] = img
+                self.render_grid[
+                    row * self.res : (row + 1) * self.res,
+                    col * self.res : (col + 1) * self.res,
+                ] = img
         self.all_frames.append(np.copy(self.render_grid))
 
     @staticmethod
     def tint_red(image, alpha=0.3):
         red_overlay = np.zeros_like(image)
-        red_overlay[..., 2] = 255 # bgr
+        red_overlay[..., 2] = 255  # bgr
         tinted = (1 - alpha) * image + alpha * red_overlay
         return np.clip(tinted, 0, 255).astype(np.uint8)
 
     @staticmethod
-    def inset_image(image: np.ndarray, inset: np.ndarray, inset_scale=1.0,
-                    top=0, left=0):
+    def inset_image(
+        image: np.ndarray, inset: np.ndarray, inset_scale=1.0, top=0, left=0
+    ):
         h, w, c = inset.shape
         new_h = h * inset_scale
         new_w = w * inset_scale
         if c == 1 and image.shape[2] == 3:
             inset = np.repeat(inset, repeats=3, axis=2)
-        inset_scaled = cv2.resize(inset, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-        image[top:top+new_h, left:left+new_w] = inset_scaled
+        inset_scaled = cv2.resize(
+            inset, (new_w, new_h), interpolation=cv2.INTER_NEAREST
+        )
+        image[top : top + new_h, left : left + new_w] = inset_scaled
         return image
 
+
 if __name__ == "__main__":
-    # torch automatically creates worker threads when performing tensor 
+    # torch automatically creates worker threads when performing tensor
     # operations. we need to limit threads to prevent computer from crashing
     # th.set_num_threads(10)
     # th.set_num_interop_threads(10)
     # th.autograd.set_detect_anomaly(True)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg_file', type=str, default='examples/hovering/bptt_hover_1.yaml')
-    parser.add_argument('--policy_cfg_file', type=str, default=None)
+    parser.add_argument(
+        "--cfg_file", type=str, default="examples/hovering/bptt_hover_1.yaml"
+    )
+    parser.add_argument("--policy_cfg_file", type=str, default=None)
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--render", action="store_true", help="Show observations")
     parser.add_argument("--save_name", type=str, default=None)
-    parser.add_argument('--num_envs', type=int, default=4)
-    parser.add_argument('--num_rollouts', type=int, default=10)
-    parser.add_argument('--res', type=int, default=512)
-    parser.add_argument('--plot', type=bool, default=False)
+    parser.add_argument("--num_envs", type=int, default=4)
+    parser.add_argument("--num_rollouts", type=int, default=10)
+    parser.add_argument("--res", type=int, default=512)
+    parser.add_argument("--plot", type=bool, default=False)
     args = parser.parse_args()
     main(args)

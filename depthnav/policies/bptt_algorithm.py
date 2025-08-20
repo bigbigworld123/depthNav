@@ -11,12 +11,14 @@ from stable_baselines3.common.type_aliases import GymEnv
 from stable_baselines3.common import logger
 
 from pylogtools import timerlog
+
 timerlog.timer.print_logs(False)
 
 from .debug import check_none_parameters, get_network_statistics, compute_gradient_norm
 from .mlp_policy import MlpPolicy
 from ..common import observation_to_device, rgba2rgb, ExitCode
 from depthnav.scripts.eval_logger import Evaluate
+
 
 class BPTT:
     """
@@ -25,15 +27,16 @@ class BPTT:
     Call learn() and get back the trained policy
     Gradients are computed across multiple timesteps and loss is computed at final time step.
     """
+
     def __init__(
         self,
         policy: Union[MlpPolicy],
         env: GymEnv,
-        eval_envs: List[GymEnv]=None,
-        eval_csvs: List[str]=None,
-        learning_rate_init: float=3e-4,
-        learning_rate_final: float=0.0,
-        weight_decay: float=0.0,
+        eval_envs: List[GymEnv] = None,
+        eval_csvs: List[str] = None,
+        learning_rate_init: float = 3e-4,
+        learning_rate_final: float = 0.0,
+        weight_decay: float = 0.0,
         run_name: Optional[str] = "BPTT",
         logging_dir: Optional[str] = "./saved",
         horizon: int = 32,
@@ -44,7 +47,6 @@ class BPTT:
         checkpoint_interval: int = 1000,
         device: Optional[Union[str, th.device]] = "cpu",
     ):
-
         self.logging_dir = os.path.abspath(logging_dir)
         self.run_path = self._create_run_path(run_name)
 
@@ -59,11 +61,11 @@ class BPTT:
         self.iterations = iterations
         self.horizon = horizon
         self.gamma = gamma
-        self.optimizer = th.optim.AdamW(self.policy.parameters(), lr=learning_rate_init, weight_decay=weight_decay)
+        self.optimizer = th.optim.AdamW(
+            self.policy.parameters(), lr=learning_rate_init, weight_decay=weight_decay
+        )
         self.lr_schedule = th.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, 
-            T_max=iterations, 
-            eta_min=learning_rate_final
+            self.optimizer, T_max=iterations, eta_min=learning_rate_final
         )
 
         # training buffers used for logging
@@ -82,7 +84,7 @@ class BPTT:
             "max_speed",
             "max_acceleration",
             "max_yaw_rate",
-            "avg_min_obstacle_distance"
+            "avg_min_obstacle_distance",
         ]
 
         self.whitelisted_csv_keys = [
@@ -99,7 +101,7 @@ class BPTT:
             "max_yaw_rate",
             "avg_reward",
             "avg_min_obstacle_distance",
-            "scene"
+            "scene",
         ]
 
     def _create_run_path(self, run_name="BPTT"):
@@ -111,24 +113,20 @@ class BPTT:
                 break
             index += 1
         return path
-    
+
     def save(self, filepath=None):
         filepath = filepath or self.run_path + ".pth"
         print(f"Saving to {filepath}")
         self.policy.save(filepath)
-        
-    def learn(
-        self,
-        render=False,
-        start_iter=0
-    ) -> ExitCode:
+
+    def learn(self, render=False, start_iter=0) -> ExitCode:
         """
         Train policy using BPTT, return True when finished training
         """
         assert self.horizon >= 1, "horizon must be greater than 1"
         assert self.env is not None
 
-        self.policy.train() 
+        self.policy.train()
         check_none_parameters(self.policy)
         self.start_time = time.time_ns()
         exit_code = ExitCode.ERROR
@@ -137,15 +135,19 @@ class BPTT:
         try:
             self.env.reset()
             episode_steps = 0
-            latent_state = th.zeros((self.env.num_envs, self.policy.latent_dim), device=self.policy.device)
+            latent_state = th.zeros(
+                (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
+            )
             for iter in tqdm(range(self.iterations)):
                 timerlog.timer.tic("iteration")
 
                 self.policy.train()
-                loss = 0.
+                loss = 0.0
                 fps_start = time.time_ns()
-                discount_factor = th.ones(self.env.num_envs, dtype=th.float32, device=self.device)
-            
+                discount_factor = th.ones(
+                    self.env.num_envs, dtype=th.float32, device=self.device
+                )
+
                 # reset agents once they have max_episode_steps experience
                 if episode_steps >= self.env.max_episode_steps:
                     self.env.reset()
@@ -167,7 +169,7 @@ class BPTT:
                     obs, reward, done, info = self.env.step(actions, is_test=False)
                     reward = reward.to(self.device)
                     done = done.to(self.device).to(th.bool)
-                    loss = loss + -1. * reward * discount_factor
+                    loss = loss + -1.0 * reward * discount_factor
 
                     # if done, reset discount factor and latents
                     discount_factor = discount_factor * self.gamma * ~done + done
@@ -175,18 +177,22 @@ class BPTT:
 
                 episode_steps += self.horizon
                 total_steps = self.env.num_envs * self.horizon
-                time_elapsed = max((time.time_ns() - fps_start) / 1e9, sys.float_info.epsilon)
+                time_elapsed = max(
+                    (time.time_ns() - fps_start) / 1e9, sys.float_info.epsilon
+                )
                 fps = int(total_steps / time_elapsed)
 
                 # backprop
-                loss = loss / self.horizon # average across the rollout
-                loss = loss.mean() # average across the batch
+                loss = loss / self.horizon  # average across the rollout
+                loss = loss.mean()  # average across the batch
                 self.optimizer.zero_grad()
                 loss.backward()
 
                 # log total gradient magnitude and clip to prevent exploding gradients
-                max_norm = 5.
-                grad_norm = th.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=max_norm)
+                max_norm = 5.0
+                grad_norm = th.nn.utils.clip_grad_norm_(
+                    self.policy.parameters(), max_norm=max_norm
+                )
                 print(f"grad norm = {grad_norm:.4f}")
 
                 # update policy
@@ -201,14 +207,20 @@ class BPTT:
                 timerlog.timer.tic("eval")
                 if iter % self.log_interval == 0:
                     self.policy.eval()
-                    for i, (eval_env, csv_file) in enumerate(zip(self.eval_envs, self.eval_csvs)):
+                    for i, (eval_env, csv_file) in enumerate(
+                        zip(self.eval_envs, self.eval_csvs)
+                    ):
                         # evaluate policy in eval_env with multiple rollouts
                         e = Evaluate(eval_env, self.policy)
                         index = start_iter + iter
-                        df = e.run_rollouts(num_rollouts=5, run_name=index, render=render)
+                        df = e.run_rollouts(
+                            num_rollouts=5, run_name=index, render=render
+                        )
 
-                        # add a column to log the scene 
-                        df["scene"] = os.path.basename(self.env.scene_manager.scene_path)
+                        # add a column to log the scene
+                        df["scene"] = os.path.basename(
+                            self.env.scene_manager.scene_path
+                        )
 
                         # log the df to tensorboard
                         basename = os.path.basename(csv_file).split(".")[0]
@@ -216,12 +228,17 @@ class BPTT:
 
                         # save df to csv
                         write_header = not os.path.exists(csv_file)
-                        df.to_csv(csv_file, float_format="%.3f", mode="a",
-                        header=write_header, columns=self.whitelisted_csv_keys)
+                        df.to_csv(
+                            csv_file,
+                            float_format="%.3f",
+                            mode="a",
+                            header=write_header,
+                            columns=self.whitelisted_csv_keys,
+                        )
                         print(f"wrote stats to {csv_file}")
-                        
+
                         # check if we should early stop
-                        last_avg_reward = df["avg_reward"].iloc[-1] 
+                        last_avg_reward = df["avg_reward"].iloc[-1]
                         if last_avg_reward < self.early_stop_reward_threshold:
                             print("REWARD FELL BELOW EARLY STOP THRESHOLD")
                             print(f"Last reward: {last_avg_reward}")
@@ -232,7 +249,9 @@ class BPTT:
                             return exit_code
 
                     # log and dump iter to tensorboard
-                    self._logger.record("train/learning_rate", self.lr_schedule.get_last_lr()[0])
+                    self._logger.record(
+                        "train/learning_rate", self.lr_schedule.get_last_lr()[0]
+                    )
                     self._logger.record("train/loss", float(loss))
                     self._logger.record("train/grad_norm", float(grad_norm))
                     self._logger.record("train/steps_per_second", fps)
@@ -253,7 +272,7 @@ class BPTT:
                 eval_env.close()
             self.env.close()
         return exit_code
-    
+
     def df_to_tensorboard(self, logger, df, prefix="eval"):
         keys = df.columns.tolist()
         for key in keys:
