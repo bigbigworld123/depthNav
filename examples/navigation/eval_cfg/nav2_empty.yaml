@@ -1,4 +1,4 @@
-env_class: navigation2_env
+env_class: navigation_env
 env:
   num_envs: 20
   seed: 42
@@ -11,8 +11,8 @@ env:
     min_starting_distance_to_target: 0.1
     position:
       class: uniform
-      mean: [-7., 0., 1.5]
-      half: [0., 7., 1.]
+      mean: [-7.5, 0., 1.5]
+      half: [0, 0, 1.]
     velocity:
       class: uniform
       mean: [0., 0., 0.]
@@ -23,8 +23,8 @@ env:
       half: [0., 0., 0.2]
     target:
       class: uniform
-      mean: [6., 0., 1.5]
-      half: [0., 0., 0.]
+      mean: [7.5, 0., 1.5]
+      half: [0, 0, 1.]
     target_speed: 
       class: uniform
       mean: [3.]
@@ -48,13 +48,14 @@ env:
     ctrl_delay: 0.0 # no control delay
     grad_decay: 0.92
     avg_velocity_window_dt: 2.0
+    vel_smoothing_factor: 2.
     exp_smoothing_factor: 12.
     enable_ctrl_smoothing: True
     enable_air_drag: False
     air_drag_theta_1: 0.1
     air_drag_theta_2: 0.1
   scene_kwargs:
-    path: configs/wall_3
+    path: configs/box_2
     reload_scenes: True
     load_geodesics: False
     spawn_obstacles: False
@@ -82,4 +83,3 @@ env:
     falloff_dis: 1.0
   max_episode_steps: 600
   device: cpu
-

@@ -1,18 +1,18 @@
-env_class: navigation2_env
+env_class: navigation_env
 env:
-  num_envs: 16
+  num_envs: 20
   seed: 42
   visual: True
   single_env: True
   base_action: [0., 0., 0.]
-  robot_radius: 0.3
+  robot_radius: 0.25
   random_kwargs:
-    safe_spawn_radius: 1.0
-    min_starting_distance_to_target: 1.0
+    safe_spawn_radius: 0.1
+    min_starting_distance_to_target: 0.1
     position:
       class: uniform
-      mean: [0., 0., 1.5]
-      half: [10., 10., 1.]
+      mean: [-7., 0., 1.5]
+      half: [0., 7., 1.]
     velocity:
       class: uniform
       mean: [0., 0., 0.]
@@ -20,10 +20,10 @@ env:
     rotation:
       class: normal 
       mean: [0., 0., 0.]
-      half: [0.0, 0.0, 0.2]
+      half: [0., 0., 0.2]
     target:
       class: uniform
-      mean: [0., 0., 1.5]
+      mean: [6., 0., 1.5]
       half: [0., 0., 0.]
     target_speed: 
       class: uniform
@@ -45,18 +45,16 @@ env:
     action_type: thrust_world_frame
     dt: 0.02
     ctrl_dt: 0.02
-    # ctrl_delay: 0.02
-    ctrl_delay: 0.0
+    ctrl_delay: 0.0 # no control delay
     grad_decay: 0.92
     avg_velocity_window_dt: 2.0
-    vel_smoothing_factor: 0.8
     exp_smoothing_factor: 12.
-    enable_ctrl_smoothing: False
+    enable_ctrl_smoothing: True
     enable_air_drag: False
     air_drag_theta_1: 0.1
     air_drag_theta_2: 0.1
   scene_kwargs:
-    path: configs/box_2
+    path: configs/wall_3
     reload_scenes: True
     load_geodesics: False
     spawn_obstacles: False
@@ -65,35 +63,23 @@ env:
       uuid: depth
       # resolution: [36, 64] # (H, W)
       resolution: [72, 128] # (H, W)
-      position: [0.08, 0, 0]
+      position: [0.1, -0.02, -0.04] # eris02 extrinsics
       orientation: [0, 0, 0]
-      far: 20.
-      near: 0.25
+      far: 10.
+      near: 0.05
   target_kwargs:
-    success_radius: 0.1
+    success_radius: 1.
   reward_kwargs:
     beta_1: 2.5
-    beta_2: -6
-    lambda_v: 4
-    lambda_c: 0
+    beta_2: -6 # bnl -32
+    lambda_v: 1
+    lambda_c: 6 # bnl 2
     lambda_a: 0.01
     lambda_j: 0.001
     lambda_om: 0.3
-    lambda_yaw: 4.0
+    lambda_yaw: 1.0
     lambda_vmax: 1.0
     falloff_dis: 1.0
   max_episode_steps: 600
   device: cpu
 
-
-train_bptt:
-  iterations: 1000
-  learning_rate_init: 0.001
-  learning_rate_final: 0.0005
-  weight_decay: 0.01
-  horizon: 150
-  gamma: 1.0
-  log_interval: 50
-  checkpoint_interval: 500
-  early_stop_reward_threshold: -150
-  device: cuda

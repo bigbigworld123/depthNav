@@ -15,11 +15,11 @@ import matplotlib.pyplot as plt
 from pylogtools import timerlog
 timerlog.timer.print_logs(False)
 
-from skinny_VisFly.envs.env_aliases import env_aliases
-from skinny_VisFly.policies.policy_aliases import policy_aliases
-from skinny_VisFly.policies.multi_input_policy import MultiInputPolicy
-from skinny_VisFly.common import observation_to_device
-from skinny_VisFly.common import std_to_habitat, obs_list2array, rgba2rgb
+from depthnav.envs.env_aliases import env_aliases
+from depthnav.policies.policy_aliases import policy_aliases
+from depthnav.policies.multi_input_policy import MultiInputPolicy
+from depthnav.common import observation_to_device
+from depthnav.common import std_to_habitat, obs_list2array, rgba2rgb
 
 def main(args):
     with open(args.cfg_file, 'r') as file:
@@ -46,7 +46,7 @@ def main(args):
         "resolution": [args.res, args.res],
         "axes": True,
         "trajectory": False,
-        "object_path": "../VisFly-datasets/datasets/skinny_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
+        "object_path": "../datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
         "line_width": 2.0,
     }
     env_class = env_aliases[config["env_class"]]
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     # th.autograd.set_detect_anomaly(True)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg_file', type=str, default='skinny_examples/hovering/bptt_hover_1.yaml')
+    parser.add_argument('--cfg_file', type=str, default='examples/hovering/bptt_hover_1.yaml')
     parser.add_argument('--policy_cfg_file', type=str, default=None)
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--render", action="store_true", help="Show observations")

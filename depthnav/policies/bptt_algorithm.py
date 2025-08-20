@@ -16,7 +16,7 @@ timerlog.timer.print_logs(False)
 from .debug import check_none_parameters, get_network_statistics, compute_gradient_norm
 from .mlp_policy import MlpPolicy
 from ..common import observation_to_device, rgba2rgb, ExitCode
-from skinny_VisFly.scripts.eval_logger import Evaluate
+from depthnav.scripts.eval_logger import Evaluate
 
 class BPTT:
     """

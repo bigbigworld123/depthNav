@@ -5,7 +5,7 @@ from typing import Union, List, Tuple, Optional, Dict
 import torch.nn.functional as F
 from enum import Enum
 
-from skinny_VisFly.utils import Rotation3, is_multiple
+from depthnav.utils import Rotation3, is_multiple
 # from pylogtools import timerlog
 
 CONTROL_LATENCY_CONV_MAX_CONTRIB = 0.01 # unitless

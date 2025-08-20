@@ -37,7 +37,7 @@ def get_enum(enum, value_str):
         raise NotImplementedError
 
 
-class Navigation2Env(BaseEnv):
+class NavigationEnv(BaseEnv):
     def __init__(
         self,
         num_envs: int = 1,

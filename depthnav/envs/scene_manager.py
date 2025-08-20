@@ -71,7 +71,7 @@ class Bounds:
 class UniformObstacleGenerator:
     def __init__(
         self,
-        obstacle_sets=["../VisFly-datasets/datasets/skinny_dataset/configs/objects"],
+        obstacle_sets=["../datasets/depthnav_dataset/configs/objects"],
         set_densities=[0.1],
         seed=None,
         random_kwargs=None,
@@ -304,7 +304,7 @@ class SceneManager:
     def __init__(
         self, 
         path: str,
-        dataset_path: str = "../VisFly-datasets/datasets/skinny_dataset",
+        dataset_path: str = "../datasets/depthnav_dataset",
         spawn_obstacles: bool = False,
         obstacle_generator_class: str = "uniform",
         obstacle_generator_kwargs=None,

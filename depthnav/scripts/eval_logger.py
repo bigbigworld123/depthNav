@@ -16,10 +16,10 @@ from copy import deepcopy
 from pylogtools import timerlog
 timerlog.timer.print_logs(False)
 
-from skinny_VisFly.envs.env_aliases import env_aliases
-from skinny_VisFly.policies.policy_aliases import policy_aliases
-from skinny_VisFly.policies.multi_input_policy import MultiInputPolicy
-from skinny_VisFly.common import observation_to_device, rgba2rgb
+from depthnav.envs.env_aliases import env_aliases
+from depthnav.policies.policy_aliases import policy_aliases
+from depthnav.policies.multi_input_policy import MultiInputPolicy
+from depthnav.common import observation_to_device, rgba2rgb
 
 def main(args):
     with open(args.cfg_file, 'r') as file:
@@ -296,7 +296,7 @@ class Evaluate:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg_file', type=str, default='skinny_examples/hovering/bptt_hover_1.yaml')
+    parser.add_argument('--cfg_file', type=str, default='examples/hovering/bptt_hover_1.yaml')
     parser.add_argument('--policy_cfg_file', type=str, default=None)
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--save_path", type=str, default=None)

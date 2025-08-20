@@ -5,7 +5,7 @@ import sys
 import yaml
 import time
 from copy import deepcopy
-from skinny_VisFly.common import ExitCode
+from depthnav.common import ExitCode
 
 def update_nested_dict(d: dict, key: str, value):
     keys = key.split(".")

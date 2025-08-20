@@ -10,9 +10,9 @@ import argparse
 import torch as th
 from copy import deepcopy
 
-from skinny_VisFly.common import std_to_habitat 
-from skinny_VisFly.utils.type import Uniform, Normal
-from skinny_VisFly.utils.rotation3 import Rotation3
+from depthnav.common import std_to_habitat 
+from depthnav.utils.type import Uniform, Normal
+from depthnav.utils.rotation3 import Rotation3
 
 empty_scene = {
     "stage_instance": {
@@ -46,7 +46,7 @@ class BoxGenerator:
         self, 
         low=[0., 0., 0.],
         high=[1., 1., 1.],
-        dataset_path="../VisFly-datasets/datasets/skinny_dataset",
+        dataset_path="../datasets/depthnav_dataset",
         object_set="primitives/medium",
         density=0.2,
         scale_rng=Uniform([1.], [0.]),
@@ -103,7 +103,7 @@ class CylinderGenerator:
         base_center=[0., 0., 0.],
         radius=3.,
         height=10.,
-        dataset_path="../VisFly-datasets/datasets/skinny_dataset",
+        dataset_path="../datasets/depthnav_dataset",
         object_set="primitives/medium",
         density=0.2,
         scale_rng=Uniform([1.], [0.]),
@@ -280,7 +280,7 @@ def parsers():
 
 if __name__ == "__main__":
     args = parsers().parse_args()
-    dataset_path = "../VisFly-datasets/datasets/skinny_dataset"
+    dataset_path = "../datasets/depthnav_dataset"
     g = SceneGenerator(
         dataset_path=dataset_path,
         num=args.quantity,
@@ -297,4 +297,4 @@ if __name__ == "__main__":
     if args.generate:
         scene_save_paths = g.generate()
     if args.render:
-        os.system(f"python skinny_VisFly/scripts/scene_viewer.py --dataset {g.summary_path} --scene {g.name}")
+        os.system(f"python depthnav/scripts/scene_viewer.py --dataset {g.summary_path} --scene {g.name}")

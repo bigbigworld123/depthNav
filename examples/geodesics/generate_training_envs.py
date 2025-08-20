@@ -2,20 +2,20 @@ import os
 from tqdm import trange
 from pylogtools import colorlog
 
-from skinny_VisFly.envs.scene_generator import (
+from depthnav.envs.scene_generator import (
     BoxGenerator, CylinderGenerator, SceneGenerator
 )
-from skinny_VisFly.utils.type import Uniform, Normal, Cylinder
-from skinny_VisFly.envs.navigation2_env import Navigation2Env
+from depthnav.utils.type import Uniform, Normal, Cylinder
+from depthnav.envs.navigation_env import NavigationEnv
 
-DATASET_PATH = "../VisFly-datasets/datasets/skinny_dataset"
+DATASET_PATH = "../datasets/depthnav_dataset"
 GRID_RESOLUTION = 0.1
 NUM_TRAIN = 25
 NUM_EVAL = 5
 VIS = False
 
 def generate_geodesics(level_name, target_pos=[0., 0., 1.5]):
-    env = Navigation2Env(
+    env = NavigationEnv(
         num_envs=1,
         single_env=True,
         visual=True,
@@ -92,8 +92,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 
     if True:
         level_name = "level_2/ring_walls_small_dense" # 1.19
@@ -128,8 +128,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 
     if True:
         level_name = "level_3/ring_walls_large" # 1.53
@@ -164,8 +164,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 
     if True:
         level_name = "level_3/ring_cubes_medium" # 1.17
@@ -200,8 +200,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
         
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 
     if True:
         level_name = "level_1/ring_cubes_large" # 1.32
@@ -236,8 +236,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 
     if True:
         level_name = "level_2/ring_cylinders_large" # 1.26
@@ -272,8 +272,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 
     if True:
         level_name = "level_4/ring_primitives_medium"
@@ -308,8 +308,8 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
     
     if True:
         level_name = "level_4/ring_primitives_medium_and_small"
@@ -356,6 +356,6 @@ if __name__ == "__main__":
         generate_geodesics(level_name)
 
         if VIS:
-            os.system(f"python skinny_VisFly/scripts/scene_viewer.py --scene {level_name}")
-            os.system(f"python skinny_examples/geodesics/interactive_flow_field.py --scene {level_name}")
+            os.system(f"python depthnav/scripts/scene_viewer.py --scene {level_name}")
+            os.system(f"python examples/geodesics/interactive_flow_field.py --scene {level_name}")
 

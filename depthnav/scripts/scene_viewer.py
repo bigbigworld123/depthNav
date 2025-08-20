@@ -2,10 +2,6 @@
 """
 Minimal habitat_sim scene viewer
 based-off habitat_sim/examples/scripts/viewer.py
-    
-run using
-    cd end2end_navigation_ws/wet/src/VisFly
-    python examples/scripts/viewer.py --scene "garage_simple"
 """
 import argparse
 import ctypes
@@ -437,10 +433,10 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset",
-        default="../VisFly-datasets/datasets/skinny_dataset/skinny_dataset.scene_dataset_config.json",
+        default="../datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json",
         type=str,
         metavar="DATASET",
-        help='dataset configuration file to use (default: "../VisFly-datasets/datasets/skinny_dataset/skinny_dataset.scene_dataset_config.json")',
+        help='dataset configuration file to use (default: "../datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json")',
     )
     parser.add_argument(
         "--width",
@@ -464,11 +460,6 @@ def parse_args():
     return args
 
 if __name__ == "__main__":
-    """
-    e.g.
-    cd end2end_navigation_ws/wet/src/VisFly
-    python examples/scripts/viewer.py --name "garage_simple"
-    """
     args = parse_args()
 
     # Setting up sim_settings

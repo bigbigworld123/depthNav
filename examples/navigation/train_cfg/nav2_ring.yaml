@@ -1,18 +1,18 @@
-env_class: navigation2_env
+env_class: navigation_env
 env:
-  num_envs: 20
+  num_envs: 16
   seed: 42
   visual: True
   single_env: True
   base_action: [0., 0., 0.]
-  robot_radius: 0.25
+  robot_radius: 0.4
   random_kwargs:
     safe_spawn_radius: 0.1
     min_starting_distance_to_target: 0.1
     position:
-      class: uniform
-      mean: [-7.5, 0., 1.5]
-      half: [0, 0, 1.]
+      class: cylinder
+      mean: [0., 0., 1.5]
+      half: [12.5, 12.5, 1.]
     velocity:
       class: uniform
       mean: [0., 0., 0.]
@@ -23,8 +23,8 @@ env:
       half: [0., 0., 0.2]
     target:
       class: uniform
-      mean: [7.5, 0., 1.5]
-      half: [0, 0, 1.]
+      mean: [0., 0., 1.5]
+      half: [0., 0., 0.]
     target_speed: 
       class: uniform
       mean: [3.]
@@ -55,9 +55,9 @@ env:
     air_drag_theta_1: 0.1
     air_drag_theta_2: 0.1
   scene_kwargs:
-    path: configs/box_2
+    path: configs/ring_level3
     reload_scenes: True
-    load_geodesics: False
+    load_geodesics: True
     spawn_obstacles: False
   sensor_kwargs:
     - sensor_type: depth
@@ -69,7 +69,7 @@ env:
       far: 10.
       near: 0.05
   target_kwargs:
-    success_radius: 1.
+    success_radius: 0.1
   reward_kwargs:
     beta_1: 2.5
     beta_2: -6 # bnl -32
@@ -83,3 +83,16 @@ env:
     falloff_dis: 1.0
   max_episode_steps: 600
   device: cpu
+
+
+train_bptt:
+  iterations: 1000
+  learning_rate_init: 0.001
+  learning_rate_final: 0.00001
+  weight_decay: 0.01
+  horizon: 150
+  gamma: 1.0
+  log_interval: 100
+  checkpoint_interval: 500
+  early_stop_reward_threshold: -150
+  device: cuda

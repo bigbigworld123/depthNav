@@ -16,9 +16,9 @@ import quaternion
 from habitat_sim.agent import AgentState
 
 from habitat_sim.utils.settings import default_sim_settings
-from skinny_VisFly.scripts.scene_viewer import HabitatSimInteractiveViewer
-from skinny_VisFly.common import habitat_to_std, std_to_habitat
-from skinny_VisFly.envs.env_aliases import env_aliases
+from depthnav.scripts.scene_viewer import HabitatSimInteractiveViewer
+from depthnav.common import habitat_to_std, std_to_habitat
+from depthnav.envs.env_aliases import env_aliases
 
 
 opacity = 1.0
@@ -117,10 +117,10 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset",
-        default="../VisFly-datasets/datasets/skinny_dataset/skinny_dataset.scene_dataset_config.json",
+        default="../datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json",
         type=str,
         metavar="DATASET",
-        help='dataset configuration file to use (default: "../VisFly-datasets/datasets/skinny_dataset/skinny_dataset.scene_dataset_config.json")',
+        help='dataset configuration file to use (default: "../datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json")',
     )
     parser.add_argument(
         "--width",
@@ -135,7 +135,7 @@ def parse_args():
         help="Vertical resolution of the window.",
     )
     parser.add_argument('--cfg_file', type=str,
-        default='skinny_examples/navigation2/train_cfg/nav2_ring.yaml'
+        default='examples/navigation/train_cfg/nav2_ring.yaml'
     )
     args = parser.parse_args()
     

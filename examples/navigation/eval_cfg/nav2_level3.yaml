@@ -1,4 +1,4 @@
-env_class: navigation2_env
+env_class: navigation_env
 env:
   num_envs: 16
   seed: 42
