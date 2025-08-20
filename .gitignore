@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 datasets/depthnav_dataset
+examples/navigation/logs/

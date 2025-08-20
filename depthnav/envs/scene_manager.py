@@ -304,7 +304,7 @@ class SceneManager:
     def __init__(
         self, 
         path: str,
-        dataset_path: str = "../datasets/depthnav_dataset",
+        dataset_path: str = "./datasets/depthnav_dataset",
         spawn_obstacles: bool = False,
         obstacle_generator_class: str = "uniform",
         obstacle_generator_kwargs=None,
