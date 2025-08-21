@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     run_params = {
         "level0_yaw_exp_avg_half_exp": (
-            "../datasets/depthnav_dataset/configs/box_2",
+            "./datasets/depthnav_dataset/configs/box_2",
             "uniform",
             0,
             -6,
@@ -20,7 +20,7 @@ if __name__ == "__main__":
             500,
         ),
         "level1_yaw_exp_avg_half_exp": (
-            "../datasets/depthnav_dataset/configs/ring_level0",
+            "./datasets/depthnav_dataset/configs/ring_level0",
             "cylinder",
             6,
             -6,
@@ -28,7 +28,7 @@ if __name__ == "__main__":
             5000,
         ),
         "level2_yaw_exp_avg_half_exp": (
-            "../datasets/depthnav_dataset/configs/ring_level1",
+            "./datasets/depthnav_dataset/configs/ring_level1",
             "cylinder",
             6,
             -6,
@@ -36,7 +36,7 @@ if __name__ == "__main__":
             5000,
         ),
         "level3_yaw_exp_avg_half_exp": (
-            "../datasets/depthnav_dataset/configs/ring_level2",
+            "./datasets/depthnav_dataset/configs/ring_level2",
             "cylinder",
             6,
             -6,

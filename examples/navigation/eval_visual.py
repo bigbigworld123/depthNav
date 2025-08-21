@@ -49,7 +49,7 @@ def main(args):
         "resolution": [args.res, args.res],
         "axes": True,
         "trajectory": False,
-        "object_path": "../datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
+        "object_path": "./datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
         "line_width": 2.0,
     }
     env_class = env_aliases[config["env_class"]]

@@ -39,7 +39,7 @@ def main(args):
                     "resolution": [512, 512],
                     "axes": True,
                     "trajectory": False,
-                    "object_path": "../datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
+                    "object_path": "./datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
                     "line_width": 2.0,
                 }
 

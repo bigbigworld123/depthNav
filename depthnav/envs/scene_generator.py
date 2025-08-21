@@ -46,7 +46,7 @@ class BoxGenerator:
         self,
         low=[0.0, 0.0, 0.0],
         high=[1.0, 1.0, 1.0],
-        dataset_path="../datasets/depthnav_dataset",
+        dataset_path="./datasets/depthnav_dataset",
         object_set="primitives/medium",
         density=0.2,
         scale_rng=Uniform([1.0], [0.0]),
@@ -109,7 +109,7 @@ class CylinderGenerator:
         base_center=[0.0, 0.0, 0.0],
         radius=3.0,
         height=10.0,
-        dataset_path="../datasets/depthnav_dataset",
+        dataset_path="./datasets/depthnav_dataset",
         object_set="primitives/medium",
         density=0.2,
         scale_rng=Uniform([1.0], [0.0]),
@@ -302,7 +302,7 @@ def parsers():
 
 if __name__ == "__main__":
     args = parsers().parse_args()
-    dataset_path = "../datasets/depthnav_dataset"
+    dataset_path = "./datasets/depthnav_dataset"
     g = SceneGenerator(
         dataset_path=dataset_path,
         num=args.quantity,

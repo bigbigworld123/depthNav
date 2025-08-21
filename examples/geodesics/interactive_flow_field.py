@@ -119,10 +119,10 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset",
-        default="../datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json",
+        default="./datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json",
         type=str,
         metavar="DATASET",
-        help='dataset configuration file to use (default: "../datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json")',
+        help='dataset configuration file to use (default: "./datasets/depthnav_dataset/depthnav_dataset.scene_dataset_config.json")',
     )
     parser.add_argument(
         "--width",
