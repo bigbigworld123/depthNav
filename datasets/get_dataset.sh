@@ -1,2 +1,2 @@
 #!/bin/bash
-gdown 1euusEyhJ3HGWyE23F6HpqDs8vKXQFr-q && unzip depthnav_dataset.zip && rm depthnav_dataset.zip
+gdown 1FsM3nydAb_J8sLh5PICQ9yDYJ9Ki6iPG && unzip depthnav_dataset.zip && rm depthnav_dataset.zip
