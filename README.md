@@ -38,7 +38,7 @@ Provides utility functions for:
 
 1.  **Clone the repository:**
     ```bash
-    git clone git@github.com:rislab/depthnav.git --init --recursive
+    git clone git@github.com:rislab/depthnav.git --recursive
     cd depthnav/
     ```
 
