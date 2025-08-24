@@ -77,8 +77,12 @@ Provides utility functions for:
     ```bash
     cd habitat-sim
     python setup.py install --with-cuda --build-type Release --cmake-args="-DPYTHON_EXECUTABLE=$(which python) -DCMAKE_CXX_FLAGS_RELEASE='-Ofast -march=native'"
+    cd ..
     ```
-
+7.  Install the `depthnav` module
+    ```bash
+    pip install -e .
+    ```
 ## Usage
 
 ## License
