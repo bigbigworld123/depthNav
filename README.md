@@ -80,3 +80,6 @@ Provides utility functions for:
     ```
 
 ## Usage
+
+## License
+MIT

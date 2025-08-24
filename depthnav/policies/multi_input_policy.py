@@ -5,7 +5,6 @@ from gymnasium import spaces
 
 from .extractors import (
     FeatureExtractor,
-    FlattenExtractor,
     StateExtractor,
     StateTargetExtractor,
     ImageExtractor,

@@ -1,7 +1,3 @@
-"""
-From 16-831 Robot Learning HW1
-"""
-
 from typing import Union, List, Dict
 import torch as th
 from torch import nn

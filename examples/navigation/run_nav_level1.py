@@ -7,6 +7,7 @@ if __name__ == "__main__":
         "train_bptt.iterations",
     )
 
+    # for tensorboard
     run_params = {
         "level0": (False, "configs/box_2", 500),
         "level1": (True, "configs/level_1", 20000),
