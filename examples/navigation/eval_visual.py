@@ -256,9 +256,9 @@ class Evaluate:
             obs = obs.astype(np.uint8)
 
             if self.first_collision[i]:
-                img = self.inset_image(render, depth, inset_scale=2)
+                img = self.inset_image(render, depth, inset_scale=1)
                 top = depth.shape[0] * 2
-                img = self.inset_image(render, obs, inset_scale=2, top=top)
+                img = self.inset_image(render, obs, inset_scale=1, top=top)
                 img = self.tint_red(img)
                 self.render_grid[
                     row * self.res : (row + 1) * self.res,
@@ -266,9 +266,9 @@ class Evaluate:
                 ] = img
 
             if not done:
-                img = self.inset_image(render, depth, inset_scale=2)
+                img = self.inset_image(render, depth, inset_scale=1)
                 top = depth.shape[0] * 2
-                img = self.inset_image(render, obs, inset_scale=2, top=top)
+                img = self.inset_image(render, obs, inset_scale=1, top=top)
                 self.render_grid[
                     row * self.res : (row + 1) * self.res,
                     col * self.res : (col + 1) * self.res,
@@ -307,6 +307,6 @@ if __name__ == "__main__":
     parser.add_argument("--save_name", type=str, default=None)
     parser.add_argument("--num_envs", type=int, default=4)
     parser.add_argument("--num_rollouts", type=int, default=10)
-    parser.add_argument("--res", type=int, default=512)
+    parser.add_argument("--res", type=int, default=256)
     args = parser.parse_args()
     main(args)
