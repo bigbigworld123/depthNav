@@ -360,10 +360,8 @@ class Evaluate:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--cfg_file", type=str, default="examples/hovering/bptt_hover_1.yaml"
-    )
-    parser.add_argument("--policy_cfg_file", type=str, default=None)
+    parser.add_argument("--cfg_file", type=str, default="examples/navigation/eval_cfg/nav_level1.yaml")
+    parser.add_argument("--policy_cfg_file", type=str, default="examples/navigation/policy_cfg/small_yaw.yaml")
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--save_path", type=str, default=None)
     parser.add_argument("--run_name", type=str, default=None)

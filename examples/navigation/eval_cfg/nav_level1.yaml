@@ -3,7 +3,7 @@ env:
   num_envs: 16
   seed: 42
   visual: True
-  single_env: True
+  single_env: False
   base_action: [0., 0., 0.]
   robot_radius: 0.25
   random_kwargs:

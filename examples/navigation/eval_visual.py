@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-import faulthandler
-
-faulthandler.enable()
 
 import os
 import cv2
@@ -39,6 +36,8 @@ def main(args):
 
     eval_config = deepcopy(config["env"])
     eval_config["num_envs"] = args.num_envs
+    eval_config["single_env"] = False
+    eval_config["scene_kwargs"]["load_geodesics"] = False
 
     render_kwargs = {}
 
@@ -85,7 +84,6 @@ def main(args):
         show=args.render,
         render_kwargs=render_kwargs,
         res=args.res,
-        plot=args.plot,
         num_cols=args.num_envs,
     )
     evaluate.run_rollouts(args.num_rollouts)
@@ -103,7 +101,6 @@ class Evaluate:
         res=512,
         num_rows=1,
         num_cols=4,
-        plot=False,
     ):
         """
         renders the first num_cols * num_rows environments
@@ -120,7 +117,6 @@ class Evaluate:
         self.res = res
         self.num_rows = num_rows
         self.num_cols = num_cols
-        self.plot = plot
 
         self.render_grid = np.zeros((num_rows * res, num_cols * res, 3), dtype=np.uint8)
         self.collided = th.zeros(self.env.num_envs, dtype=th.bool)
@@ -220,165 +216,10 @@ class Evaluate:
                     if i == 0:
                         loss_metrics[j][metric] = th.zeros(self.env.max_episode_steps)
                     loss_metrics[j][metric][i] = value.item()
-            positions[~terminated, i] = self.env.position[~terminated]
-            velocities[~terminated, i] = self.env.velocity[~terminated]
-            quaternions[~terminated, i] = self.env.quaternion_sb[~terminated]
-            obs_velocities[~terminated, i] = obs["state"][~terminated, -3:]
-            obs_quaternions[~terminated, i] = obs["state"][~terminated, :4]
-            moving_avg_velocities[~terminated, i] = self.env.moving_average_velocity[
-                ~terminated
-            ]
-            accelerations[~terminated, i] = self.env.acceleration[~terminated]
-            jerks[~terminated, i] = self.env.jerk[~terminated]
-            if actions is None:
-                actions = th.zeros(
-                    (self.env.num_envs, self.env.max_episode_steps, action.shape[1])
-                )
-            actions[~terminated, i] = action[~terminated].cpu()
-            target_dist[~terminated, i] = th.norm(
-                self.env.target - self.env.position, dim=1
-            )[~terminated]
-            target_vel[~terminated, i] = self.env.target_velocity.norm(dim=1)[
-                ~terminated
-            ]  # obs["target"].norm(dim=1)[~terminated]
-            terminations[:, i] = terminated
 
             i += 1
             if terminated.all():
                 break
-
-        if self.plot:
-            t = th.arange(0, self.env.max_episode_steps) * self.env.dynamics.ctrl_dt
-            colors = ["blue", "orange", "red", "green"]
-            fig, axs = plt.subplots(nrows=7, ncols=1, sharex=True, figsize=(8, 10))
-
-            for j in range(self.env.num_envs):
-                terminated_idx = th.nonzero(terminations[j], as_tuple=True)[0]
-                end = terminated_idx[0].item()
-
-                axs[0].plot(
-                    t[:end],
-                    target_dist[j, :end],
-                    label=f"target dist agent {j}",
-                    color=colors[j],
-                )  # , linestyle="dotted")
-                axs[0].plot(
-                    t[:end],
-                    target_vel[j, :end],
-                    label=f"target vel agent {j}",
-                    linestyle="dashed",
-                )  # , color=colors[j])
-
-                axs[1].plot(
-                    t[:end], velocities[j, :end].norm(dim=1), label=f"vel agent {j}"
-                )  # , color=colors[j])
-                axs[1].plot(
-                    t[:end],
-                    obs_velocities[j, :end].norm(dim=1),
-                    label=f"obs vel agent {j}",
-                )  # , color=colors[j])
-                axs[1].plot(
-                    t[:end],
-                    moving_avg_velocities[j, :end].norm(dim=1),
-                    label=f"mvg avg agent {j}",
-                    linestyle="dotted",
-                )  # , color=colors[j])
-                axs[1].plot(
-                    t[:end],
-                    target_vel[j, :end],
-                    label=f"target vel agent {j}",
-                    linestyle="dashed",
-                )  # , color=colors[j])
-
-                axs[2].plot(
-                    t[:end],
-                    accelerations[j, :end].norm(dim=1),
-                    label=f"accel agent {j}",
-                )  # , color=colors[j])
-                if actions.shape[-1] == 4:
-                    axs[2].scatter(
-                        t[:end], actions[j, :end, 3], label=f"yaw agent {j}", s=2
-                    )  # , color=colors[j]
-                    axs[2].plot(
-                        t[:end],
-                        actions[j, :end, :3].norm(dim=1),
-                        label=f"thrust agent {j}",
-                        linestyle="dotted",
-                    )  # , color=colors[j]
-                else:
-                    axs[2].plot(
-                        t[:end],
-                        actions[j, :end].norm(dim=1),
-                        label=f"thrust agent {j}",
-                        linestyle="dotted",
-                    )  # , color=colors[j]
-
-                axs[3].plot(
-                    t[:end], jerks[j, :end].norm(dim=1), label=f"jerk agent {j}"
-                )  # , color=colors[j])
-
-                lines = ["solid", "dashed", "dotted", "dashdot"]
-                for itr, (metric, values) in enumerate(loss_metrics[j].items()):
-                    values = values.numpy()
-                    axs[4].plot(
-                        t[:end],
-                        values[:end],
-                        label=f"{metric} agent {j}",
-                        linestyle=lines[itr % len(lines)],
-                    )  # , color=colors[j])
-
-                    d_values = np.diff(values[:end])
-                    axs[5].plot(
-                        t[: end - 1],
-                        d_values,
-                        label=f"{metric} agent {j}",
-                        linestyle=lines[itr % len(lines)],
-                    )  # , color=colors[j])
-
-                axs[6].plot(
-                    t[:end], quaternions[j, :end], label=f"quaternions agent {j}"
-                )  # , color=colors[j])
-                axs[6].plot(
-                    t[:end],
-                    obs_quaternions[j, :end],
-                    label=f"obs quaternions agent {j}",
-                )  # , color=colors[j])
-
-            axs[0].set_ylabel("Target distance ($m$)")
-            axs[1].set_ylabel("Velocity ($m/s$)")
-            axs[2].set_ylabel("Acceleration ($m/s^2$)")
-            axs[3].set_ylabel("Jerk ($m/s^3$)")
-            axs[4].set_ylabel("Loss terms")
-            axs[5].set_ylabel("Change in loss")
-            axs[0].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
-            axs[1].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
-            axs[2].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
-            axs[3].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
-            axs[4].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
-            axs[5].legend(loc="center left", bbox_to_anchor=(1.05, 0.5))
-
-            lambda_a = self.env.reward_kwargs["lambda_a"]
-            lambda_j = self.env.reward_kwargs["lambda_j"]
-            lambda_vmax = self.env.reward_kwargs.get("lambda_vmax", 0.0)
-            # lambda_a = 0.01
-            # lambda_j = 0.001
-            lambda_vmax = 1.0
-            axs[0].set_title(
-                f"$\lambda_a = {lambda_a}$, $\lambda_j = {lambda_j}$, $\lambda_{{vmax}} = {lambda_vmax}$"
-            )
-            axs[-1].set_xlabel("Time ($s$)")
-
-            axs[0].grid()
-            axs[1].grid()
-            axs[2].grid()
-            axs[3].grid()
-            axs[4].grid()
-            axs[5].grid()
-
-            # adjust to make space for legends
-            plt.tight_layout()
-            plt.subplots_adjust(right=0.7)  # adds space on right
-            plt.show()
 
     def _preprocess_depth(self, depth: th.Tensor):
         """From ImageExtractor.preprocess_depth()"""
@@ -458,23 +299,14 @@ class Evaluate:
 
 
 if __name__ == "__main__":
-    # torch automatically creates worker threads when performing tensor
-    # operations. we need to limit threads to prevent computer from crashing
-    # th.set_num_threads(10)
-    # th.set_num_interop_threads(10)
-    # th.autograd.set_detect_anomaly(True)
-
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--cfg_file", type=str, default="examples/hovering/bptt_hover_1.yaml"
-    )
-    parser.add_argument("--policy_cfg_file", type=str, default=None)
+    parser.add_argument("--cfg_file", type=str, default="examples/navigation/eval_cfg/nav_level1.yaml")
+    parser.add_argument("--policy_cfg_file", type=str, default="examples/navigation/policy_cfg/small_yaw.yaml")
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--render", action="store_true", help="Show observations")
     parser.add_argument("--save_name", type=str, default=None)
     parser.add_argument("--num_envs", type=int, default=4)
     parser.add_argument("--num_rollouts", type=int, default=10)
     parser.add_argument("--res", type=int, default=512)
-    parser.add_argument("--plot", type=bool, default=False)
     args = parser.parse_args()
     main(args)

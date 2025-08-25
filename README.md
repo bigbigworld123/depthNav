@@ -83,7 +83,74 @@ Provides utility functions for:
     ```bash
     pip install -e .
     ```
+
 ## Usage
+
+### Training
+
+We train the policy using `run_nav_level1.py`. The policy is trained in two
+"levels". In the first level, "level0", the agent is trained for 500 iterations
+in an empty environment with no collision loss. This helps the policy learn to
+fly and navigate to the target without any obstacle avoidance. Next the policy
+is trained in "level1" for 20K iterations with random obstacles and all loss
+terms enabled. The training set includes 50 environment instances of randomly
+generated cuboid obstacles.
+
+```bash
+python examples/navigation/run_nav_level1.py
+```
+
+You can follow the training progress by running tensorboard in another terminal.
+Then opening `https://localhost:6006` in a web browser. Model checkpoints are 
+saved in `examples/navigation/logs` every 500 iterations.
+
+```bash
+source .venv/bin/activate
+tensorboard --logdir examples/navigation/logs/
+```
+
+Here is an example of what the training success rate should look like:
+
+![tensorboard_success_rate](docs/tensorboard_success_rate.png)
+
+### Evaluation
+
+Rollouts of the trained policy can be visualized with the `eval_visual.py`
+script.  The script runs a batch of `--num_envs` agents for `--num_rollouts`
+with the policy specified by the `--weight` path. A video of all the rollouts is
+saved to the `--save_name` path (default is the `--weight` parent directory).
+
+The evaluation environments are 10 random configurations of cuboid obstacles
+that have been held out from the training set.
+
+```bash
+python examples/navigation/eval_visual.py \
+    --weight "examples/navigation/logs/level1/level1_1.pth" \
+    --render \
+    --num_envs 4 \
+    --num_rollouts 10
+```
+
+Success rate and other evaluation statistics can be obtained by running the 
+`eval_logger.py` script. It will run a batch of `--num_envs` agents for 
+`--num_rollouts` and append a summary of statistics to a csv file.
+
+```bash
+python depthnav/scripts/eval_logger.py \
+    --weight examples/navigation/logs/level1/level1_1.pth \
+    --num_envs 4 \
+    --num_rollouts 10
+```
 
 ## License
 MIT
+
+## Citation
+Coming soon.
+
+## Acknowledgements
+
+This work builds off of the following open source software:
+- [VisFly](https://github.com/SJTU-ViSYS-team/VisFly)
+- [habitat-sim](https://github.com/facebookresearch/habitat-sim)
+- [scikit-fmm](https://github.com/scikit-fmm/scikit-fmm/tree/master)
