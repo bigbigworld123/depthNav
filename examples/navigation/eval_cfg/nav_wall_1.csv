@@ -1,4 +1,0 @@
-,success_rate,collision_rate,timeout_rate,num_trials,avg_speed,max_speed,max_acceleration,avg_reward,avg_duration,std_duration,avg_path_length,std_path_length,avg_control_effort,avg_yaw_rate,max_yaw_rate,avg_min_obstacle_distance
-examples/navigation/logs/geodesic_test/level1_geodesic_collision_no_slerp_target_distance_1_1,0.950,0.050,0.000,20,1.512,2.970,3.459,-1.978,12.881,2.037,19.059,2.024,0.460,-0.004,0.337,0.488
-examples/navigation/logs/curriculum_2/level1_small_1_iteration_3000_1,0.950,0.050,0.000,20,2.270,3.076,3.538,-2.875,7.034,1.443,351.700,72.139,15.498,1.353,0.754,0.016,0.281,0.484,-1.048,0.800,10.049,-0.294,5.604,0.278,1.339,1.025,-0.942,0.056
-examples/navigation/logs/curriculum_2/level1_small_3_iteration_4000_1,0.750,0.000,0.250,20,1.922,2.883,3.319,-2.526,8.003,2.775,400.150,138.726,13.771,2.073,0.613,0.002,0.236,0.496,-1.076,-0.073,9.232,-0.318,3.916,-0.614,1.595,1.157,0.058,-0.020
