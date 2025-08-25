@@ -92,14 +92,6 @@ cd datasets/
 ```
 
 ### Training
-```bash
-python examples/navigation/run_nav_level1.py
-```
-
-### Evaluation
-
-
-### Training
 
 We train the policy using `run_nav_level1.py`. The policy is trained in two
 "levels". In the first level, "level0", the agent is trained for 500 iterations
