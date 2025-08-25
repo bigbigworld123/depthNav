@@ -85,6 +85,19 @@ Provides utility functions for:
     ```
 
 ## Usage
+Download dataset:
+```bash
+cd datasets/
+./get_dataset.sh
+```
+
+### Training
+```bash
+python examples/navigation/run_nav_level1.py
+```
+
+### Evaluation
+
 
 ### Training
 
