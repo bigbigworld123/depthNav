@@ -175,6 +175,11 @@ If you use this work in your research, kindly consider citing us:
 ```
 
 ## Acknowledgements
+The authors would like to thank Ankit Khandelwal for contributions to
+the codebase and Edsel Burkholder for field testing
+support. This material is based upon work supported in part by
+the Army Research Laboratory and the Army Research Office under
+contract/grant number W911NF-25-2-0153.
 
 This work builds off of the following open source software:
 - [VisFly](https://github.com/SJTU-ViSYS-team/VisFly)
