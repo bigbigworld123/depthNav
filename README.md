@@ -1,5 +1,11 @@
 # DepthNav
 
+
+
+https://github.com/user-attachments/assets/1e379ef5-6bd3-4e3e-9459-0f89c0350a19
+
+
+
 DepthNav is a research framework for developing and evaluating autonomous navigation policies, particularly for aerial robots in complex 3D environments. It leverages depth sensing for navigation and provides a comprehensive suite for simulation, training, and analysis using [Habitat-sim](https://github.com/facebookresearch/habitat-sim).
 
 ## Core Components
@@ -136,6 +142,13 @@ python examples/navigation/eval_visual.py \
     --num_rollouts 10
 ```
 
+You should see an output like this:
+
+
+https://github.com/user-attachments/assets/fd2fac5c-4fbe-4c32-b600-7a0c2df15aac
+
+
+
 Success rate and other evaluation statistics can be obtained by running the 
 `eval_logger.py` script. It will run a batch of `--num_envs` agents for 
 `--num_rollouts` and append a summary of statistics to a csv file.
@@ -151,7 +164,15 @@ python depthnav/scripts/eval_logger.py \
 MIT
 
 ## Citation
-Coming soon.
+If you use this work in your research, kindly consider citing us:
+```bibtex
+@inproceedings{lee_quadrotor_2026,
+  title = {{{Quadrotor Navigation}} using {{Reinforcement Learning}} with {{Privileged Information}}},
+  author = {Lee, Jonathan and Rathod, Abhishek and Goel, Kshitij and Stecklein, John and Tabib, Wennie},
+  year = {2025},
+  month= {Sept}
+} 
+```
 
 ## Acknowledgements
 
