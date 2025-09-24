@@ -1,6 +1,6 @@
 env_class: navigation_env
 env:
-  num_envs: 16
+  num_envs: 8
   seed: 42
   visual: True
   single_env: True

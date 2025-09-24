@@ -154,7 +154,7 @@ class BPTT:
                     episode_steps = 0
 
                 # rollout policy over horizon steps
-                for _ in range(self.horizon):
+                for t in range(self.horizon):
                     obs = self.env.get_observation()
                     obs = observation_to_device(obs, self.policy.device)
                     if type(self.policy) == MlpPolicy:
@@ -174,6 +174,19 @@ class BPTT:
                     # if done, reset discount factor and latents
                     discount_factor = discount_factor * self.gamma * ~done + done
                     latent_state = latent_state * ~done.unsqueeze(1)
+                    
+                    # Detach tensors to prevent computation graph accumulation
+                    if isinstance(actions, th.Tensor):
+                        actions = actions.detach()
+                    if isinstance(reward, th.Tensor):
+                        reward = reward.detach()
+                    if isinstance(done, th.Tensor):
+                        done = done.detach()
+                    
+                    # Explicitly detach observation tensors to prevent memory buildup
+                    for key in obs:
+                        if isinstance(obs[key], th.Tensor):
+                            obs[key] = obs[key].detach()
 
                 episode_steps += self.horizon
                 total_steps = self.env.num_envs * self.horizon
@@ -199,9 +212,16 @@ class BPTT:
                 self.optimizer.step()
                 self.lr_schedule.step()
 
-                # detach gradients
+                # detach gradients properly
                 self.env.detach()
-                latent_state = latent_state.clone().detach()
+                latent_state = latent_state.detach()
+                loss = loss.detach()
+                discount_factor = discount_factor.detach()
+                
+                # Clear CUDA cache periodically to prevent memory accumulation
+                if iter % 50 == 0 and th.cuda.is_available():
+                    th.cuda.empty_cache()
+                    
                 timerlog.timer.toc("iteration")
 
                 timerlog.timer.tic("eval")
