@@ -12,7 +12,7 @@ from .extractors import (
     StateTargetImageExtractor,
 )
 from .mlp_policy import MlpPolicy
-
+from .asymmetric_extractor import AsymmetricExtractor
 
 class LayerNormGRUCell(nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -48,6 +48,7 @@ class MultiInputPolicy(MlpPolicy):
         "StateTargetExtractor": StateTargetExtractor,
         "StateImageExtractor": StateImageExtractor,
         "StateTargetImageExtractor": StateTargetImageExtractor,
+        "AsymmetricExtractor": AsymmetricExtractor, # 非对称特征融合提取器
     }
     recurrent_alias = {
         "GRUCell": th.nn.GRUCell,

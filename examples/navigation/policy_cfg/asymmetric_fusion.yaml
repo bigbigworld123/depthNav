@@ -1,0 +1,47 @@
+# In file: examples/navigation/policy_cfg/asymmetric_fusion.yaml
+
+policy_class: MultiInputPolicy
+policy:
+  # 1. 指定使用我们新的提取器
+  feature_extractor_class: AsymmetricExtractor
+  
+  # 2. 详细配置新提取器的网络结构
+  feature_extractor_kwargs:
+    activation_fn: leaky_relu
+    net_arch:
+      # state编码器: 输出128维
+      state:
+        mlp_layer: [128]
+      
+      # target编码器: 输出128维
+      target:
+        mlp_layer: [128]
+        
+      # depth编码器: CNN输出后，再用MLP降到32维
+      depth:
+        kernel_size: [5, 3, 3]
+        channels: [16, 32, 32]
+        stride: [2, 2, 2]
+        padding: [0, 0, 0]
+        mlp_layer: [64, 32] # CNN输出 -> 64维 -> 32维
+        
+      # 融合网络: 将拼接后的 (128+128+32=288)维 特征映射到 192维
+      fusion:
+        mlp_layer: [192]
+
+  # 3. 后续策略网络保持不变，因为它的输入仍然是192维
+  net_arch:
+    recurrent:
+      class: GRUCell
+      kwargs:
+        hidden_size: 192
+    mlp_layer: [4]
+  activation_fn: leaky_relu
+  output_activation_fn: acceleration_bounded_yaw
+  device: cuda
+
+# 环境变量更新部分保持不变
+update_env_kwargs:
+  action_type: THRUST_YAW
+  inertial_frame: START
+  target_type: TARGET_VELOCITY_TARGET_DISTANCE

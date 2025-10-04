@@ -301,7 +301,7 @@ class Evaluate:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cfg_file", type=str, default="examples/navigation/eval_cfg/nav_level1.yaml")
-    parser.add_argument("--policy_cfg_file", type=str, default="examples/navigation/policy_cfg/small_yaw.yaml")
+    parser.add_argument("--policy_cfg_file", type=str, default="examples/navigation/policy_cfg/large_yaw.yaml")
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--render", action="store_true", help="Show observations")
     parser.add_argument("--save_name", type=str, default=None)
