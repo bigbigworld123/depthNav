@@ -138,7 +138,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    self.omega,
+                    # self.omega,
                 ]
             ).to(self.device)
 
@@ -155,7 +155,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    self.omega,
+                    # self.omega,
                 ]
             ).to(self.device)
 
@@ -171,7 +171,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    self.omega,
+                    # self.omega,
                 ]
             ).to(self.device)
 

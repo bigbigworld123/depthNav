@@ -773,7 +773,7 @@ class SceneManager:
                         scene_center = (scene_aabb.min + scene_aabb.max) / 2
                         scene_height = (
                             scene_aabb.max[1] - scene_aabb.min[1]
-                        ) + scene_aabb.max[1] * 2
+                        ) + scene_aabb.max[1] * 100
                     else:
                         scene_center = std_to_habitat(
                             th.tensor(self.render_settings["position"]), None

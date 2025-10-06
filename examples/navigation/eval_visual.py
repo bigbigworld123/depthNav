@@ -42,12 +42,12 @@ def main(args):
     render_kwargs = {}
 
     eval_config["scene_kwargs"]["render_settings"] = {
-        "mode": "follow",
-        "view": "back",
+        "mode": "fix",     # <-- 改为固定模式
+        "view": "top",     # <-- 改为俯视视角
         "sensor_type": "color",
-        "resolution": [args.res, args.res],
-        "axes": True,
-        "trajectory": False,
+        "resolution": [args.res, args.res], # 分辨率
+        "axes": False,      # 在俯视图中可以关掉坐标轴，更清爽
+        "trajectory": True, # 打开轨迹，可以看机器人走的路线
         "object_path": "./datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
         "line_width": 2.0,
     }
