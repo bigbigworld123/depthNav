@@ -70,6 +70,9 @@ class MultiInputPolicy(MlpPolicy):
                 feature_extractor_class
             ]
         feature_extractor_kwargs = feature_extractor_kwargs or {}
+        
+        self.use_motion_modulation = feature_extractor_kwargs.pop("use_motion_modulation", False)
+
 
         # get the size of features_dim before initializing MlpPolicy
         feature_extractor = feature_extractor_class(
@@ -111,9 +114,31 @@ class MultiInputPolicy(MlpPolicy):
             self._latent_dim = in_dim
             self.recurrent_extractor = recurrent_extractor
 
+        if self.use_motion_modulation:
+            # 运动信息维度为6 (3维线速度 + 3维角速度)
+            ego_motion_dim = 6 
+            # 调节器的输出维度必须和特征提取器的输出维度一致
+            features_dim = feature_extractor.features_dim
+            
+            self.motion_modulator = nn.Sequential(
+                nn.Linear(ego_motion_dim, features_dim),
+                nn.Sigmoid() # 使用Sigmoid将输出缩放到0-1之间，作为门控信号
+            ).to(device)
+
     def forward(self, obs, latent=None):
         features = self.feature_extractor(obs)
         features = self.feature_norm(features)
+        if self.use_motion_modulation:
+            # 从 state 观测中提取运动信息 (后6个维度)
+            # state 格式: [quat(4), lin_vel(3), ang_vel(3)], 所以取最后6维
+            ego_motion = obs["state"][:, -6:]
+            
+            # 通过调节器生成门控信号
+            modulation_gate = self.motion_modulator(ego_motion)
+            
+            # 将门控信号与特征逐元素相乘，实现调节
+            features = features * modulation_gate
+            
         if self.is_recurrent:
             latent = self.recurrent_extractor(features, latent)
             actions = super().forward(latent)

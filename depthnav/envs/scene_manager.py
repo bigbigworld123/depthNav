@@ -497,9 +497,9 @@ class SceneManager:
                 )
 
                 # disable updating trajectory for now
-                # self.trajectory[scene_id][agent_id].insert(0,
-                #     np.hstack([hab_pos[drone_id], hab_ori[drone_id]])
-                # )
+                self.trajectory[scene_id][agent_id].insert(0,
+                    np.hstack([hab_pos[drone_id], hab_ori[drone_id]])
+                )
                 drone_id += 1
                 if self.is_multi_drone:
                     self._objects[scene_id][
@@ -771,9 +771,12 @@ class SceneManager:
                     if self.render_settings["position"] is None:
                         scene_aabb = self._scene_bounds[scene_id]
                         scene_center = (scene_aabb.min + scene_aabb.max) / 2
-                        scene_height = (
-                            scene_aabb.max[1] - scene_aabb.min[1]
-                        ) + scene_aabb.max[1] * 2
+
+                        # 检查是否传入了自定义高度，否则使用默认计算
+                        if "camera_height" in self.render_settings:
+                            scene_height = self.render_settings["camera_height"]
+                        else:
+                            scene_height = (scene_aabb.max[1] - scene_aabb.min[1]) + scene_aabb.max[1] * 2
                     else:
                         scene_center = std_to_habitat(
                             th.tensor(self.render_settings["position"]), None
@@ -1054,7 +1057,7 @@ class SceneManager:
         orientation: np.ndarray,
     ):
         """reset the agent"""
-        self.trajectory[scene_id][agent_id] = []
+        # self.trajectory[scene_id][agent_id] = []
         self.agents[scene_id][agent_id].set_state(
             habitat_sim.AgentState(
                 position=position,

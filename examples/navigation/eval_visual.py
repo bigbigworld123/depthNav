@@ -41,16 +41,24 @@ def main(args):
 
     render_kwargs = {}
 
+    # ==========================================================
+    # !! 核心修改 !!
+    # ==========================================================
     eval_config["scene_kwargs"]["render_settings"] = {
-        "mode": "follow",
-        "view": "back",
+        "mode": "fix",
+        "view": "top",
+        # 1. 添加自定义相机高度，您可以调整这个值 (越小越近)
+        "camera_height": 16.0,
+        # 2. 开启轨迹绘制功能
+        "trajectory": True,
         "sensor_type": "color",
         "resolution": [args.res, args.res],
         "axes": True,
-        "trajectory": False,
         "object_path": "./datasets/depthnav_dataset/configs/agents/DJI_Mavic_Mini_2.object_config.json",
         "line_width": 2.0,
     }
+    # ==========================================================
+
     env_class = env_aliases[config["env_class"]]
     env = env_class(requires_grad=False, **eval_config)
 
@@ -102,9 +110,6 @@ class Evaluate:
         num_rows=1,
         num_cols=4,
     ):
-        """
-        renders the first num_cols * num_rows environments
-        """
         assert num_rows * num_cols == env.num_envs
 
         self.env = env
@@ -128,10 +133,9 @@ class Evaluate:
     def run_rollouts(self, num_rollouts=1):
         for _ in range(num_rollouts):
             self.env.reset()
-            # add start and target position to render_kwargs
             self.render_kwargs["points"] = th.cat(
                 [self.env.position.unsqueeze(1), self.env.target.unsqueeze(1)], dim=1
-            )  # (B, 2, 3)
+            )
             self.single_rollout()
 
         if self.save:
@@ -161,28 +165,11 @@ class Evaluate:
         self.collided = th.zeros(self.env.num_envs, dtype=th.bool)
         self.first_collision = th.zeros(self.env.num_envs, dtype=th.bool)
         self.done = th.zeros(self.env.num_envs, dtype=th.bool)
-
-        positions = []
-        positions = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
-        quaternions = th.zeros((self.env.num_envs, self.env.max_episode_steps, 4))
-        obs_quaternions = th.zeros((self.env.num_envs, self.env.max_episode_steps, 4))
-        velocities = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
-        obs_velocities = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
-        moving_avg_velocities = th.zeros(
-            (self.env.num_envs, self.env.max_episode_steps, 3)
-        )
-        accelerations = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
-        jerks = th.zeros((self.env.num_envs, self.env.max_episode_steps, 3))
-        actions = None
-        terminations = th.zeros((self.env.num_envs, self.env.max_episode_steps))
-        target_dist = th.zeros((self.env.num_envs, self.env.max_episode_steps))
-        target_vel = th.zeros((self.env.num_envs, self.env.max_episode_steps))
-        loss_metrics = [{} for _ in range(self.env.num_envs)]
-
+        
         latent_state = th.zeros(
             (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
         )
-        i = 0
+        
         while True:
             start = time.time()
             obs = observation_to_device(self.env.get_observation(), self.policy.device)
@@ -197,105 +184,46 @@ class Evaluate:
             self.first_collision = self.env.is_collision & ~self.collided
             self.collided = self.collided | self.env.is_collision
 
-            if self.show or self.save_video:
+            if self.show or self.save:
                 render_list = rgba2rgb(
                     self.env.scene_manager.render(**self.render_kwargs)
                 )
-                self.render(render_list, obs, terminated)
+                self.render(render_list, terminated)
 
                 if self.show:
                     cv2.imshow("render cams", self.render_grid)
                     elapsed = time.time() - start
                     wait_ms = max(int(1000 * (self.env.dynamics.ctrl_dt - elapsed)), 1)
                     cv2.waitKey(wait_ms)
-
-            for j in range(self.env.num_envs):
-                if terminated[j]:
-                    continue
-                for metric, value in infos[j]["loss_metrics"].items():
-                    if i == 0:
-                        loss_metrics[j][metric] = th.zeros(self.env.max_episode_steps)
-                    loss_metrics[j][metric][i] = value.item()
-
-            i += 1
+            
             if terminated.all():
                 break
 
-    def _preprocess_depth(self, depth: th.Tensor):
-        """From ImageExtractor.preprocess_depth()"""
-        depth = depth.float()
-        depth[depth < 1e-6] = 1e-6
-        inv_depth = 1.0 / depth
-
-        if hasattr(self.policy.feature_extractor, "input_max_pool_H_W"):
-            # apply max pooling
-            # note this preserves closer objects, since we use inverted depth
-            H, W = self.policy.feature_extractor.input_max_pool_H_W
-            inv_depth = F.adaptive_max_pool2d(inv_depth, (H, W))
-            pass
-        return inv_depth
-
-    def render(self, render_list, observations, dones):
-        obs_list = th.split(observations["depth"], 1, dim=0)  # (B, C, H, W)
-        obs_list = [obs.squeeze(0).permute(1, 2, 0).cpu().numpy() for obs in obs_list]
-        for i, (render, depth, done) in enumerate(zip(render_list, obs_list, dones)):
+    def render(self, render_list, dones):
+        for i, (render, done) in enumerate(zip(render_list, dones)):
             row = i // self.num_cols
             col = i % self.num_cols
 
-            # visualize downsampled observation
-            # (H, W, C) -> (C, H, W)
-            obs = th.from_numpy(np.transpose(depth, (2, 0, 1)))
-            obs = self._preprocess_depth(obs).numpy()
-            # (C, H, W) -> (H, W, C)
-            obs = np.transpose(obs, (1, 2, 0))
-
-            # rescale for visualization purposes
-            depth = (depth - depth.min()) / (depth.max() - depth.min()) * 255
-            depth = depth.astype(np.uint8)
-            obs = (obs - obs.min()) / (obs.max() - obs.min()) * 255
-            obs = obs.astype(np.uint8)
-
             if self.first_collision[i]:
-                img = self.inset_image(render, depth, inset_scale=1)
-                top = depth.shape[0] * 2
-                img = self.inset_image(render, obs, inset_scale=1, top=top)
-                img = self.tint_red(img)
+                img = self.tint_red(render)
                 self.render_grid[
                     row * self.res : (row + 1) * self.res,
                     col * self.res : (col + 1) * self.res,
                 ] = img
 
             if not done:
-                img = self.inset_image(render, depth, inset_scale=1)
-                top = depth.shape[0] * 2
-                img = self.inset_image(render, obs, inset_scale=1, top=top)
                 self.render_grid[
                     row * self.res : (row + 1) * self.res,
                     col * self.res : (col + 1) * self.res,
-                ] = img
+                ] = render
         self.all_frames.append(np.copy(self.render_grid))
 
     @staticmethod
     def tint_red(image, alpha=0.3):
         red_overlay = np.zeros_like(image)
-        red_overlay[..., 2] = 255  # bgr
+        red_overlay[..., 2] = 255
         tinted = (1 - alpha) * image + alpha * red_overlay
         return np.clip(tinted, 0, 255).astype(np.uint8)
-
-    @staticmethod
-    def inset_image(
-        image: np.ndarray, inset: np.ndarray, inset_scale=1.0, top=0, left=0
-    ):
-        h, w, c = inset.shape
-        new_h = h * inset_scale
-        new_w = w * inset_scale
-        if c == 1 and image.shape[2] == 3:
-            inset = np.repeat(inset, repeats=3, axis=2)
-        inset_scaled = cv2.resize(
-            inset, (new_w, new_h), interpolation=cv2.INTER_NEAREST
-        )
-        image[top : top + new_h, left : left + new_w] = inset_scaled
-        return image
 
 
 if __name__ == "__main__":
@@ -305,8 +233,8 @@ if __name__ == "__main__":
     parser.add_argument("--weight", type=str, default=None, help="trained weight name")
     parser.add_argument("--render", action="store_true", help="Show observations")
     parser.add_argument("--save_name", type=str, default=None)
-    parser.add_argument("--num_envs", type=int, default=4)
-    parser.add_argument("--num_rollouts", type=int, default=10)
-    parser.add_argument("--res", type=int, default=256)
+    parser.add_argument("--num_envs", type=int, default=1)
+    parser.add_argument("--num_rollouts", type=int, default=1)
+    parser.add_argument("--res", type=int, default=720) # 提高默认分辨率
     args = parser.parse_args()
     main(args)

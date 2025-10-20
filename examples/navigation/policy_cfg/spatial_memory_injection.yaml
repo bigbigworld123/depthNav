@@ -1,0 +1,43 @@
+# In file: examples/navigation/policy_cfg/spatial_memory_injection.yaml
+
+policy_class: MultiInputPolicy
+policy:
+  # 我们依然使用能处理 state, target, depth 的提取器
+  feature_extractor_class: StateTargetImageExtractor
+  
+  feature_extractor_kwargs:
+    # 关键创新点：设置这个新标志为 true 来激活我们的特征调节功能！
+    use_motion_modulation: True
+    
+    activation_fn: leaky_relu
+    net_arch:
+      state:
+        mlp_layer: [192]
+      target:
+        mlp_layer: [192]
+      depth:
+        input_max_pool_H_W: [12, 16]
+        kernel_size: [2, 3, 3]
+        channels: [32, 64, 128]
+        padding: [0, 0, 0]
+        stride: [1, 1, 1]
+        mlp_layer: [192]
+      # 我们使用逐元素相加的方式融合特征，所以所有分支的维度都保持为192
+      concatenate: False
+
+  net_arch:
+    recurrent:
+      class: GRUCell
+      kwargs:
+        # 特征提取器的输出维度是192，所以GRU的hidden_size也是192
+        hidden_size: 192
+    mlp_layer: [4]
+  activation_fn: leaky_relu
+  output_activation_fn: acceleration_bounded_yaw
+  device: cuda
+
+# 确保环境变量的配置与您的策略匹配
+update_env_kwargs:
+  action_type: THRUST_YAW
+  inertial_frame: START
+  target_type: TARGET_VELOCITY_TARGET_DISTANCE
