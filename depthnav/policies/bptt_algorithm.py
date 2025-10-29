@@ -134,6 +134,9 @@ class BPTT:
 
         try:
             self.env.reset()
+            # ！！！ 核心修改：在 episode 開始時重置記憶 ！！！
+            if getattr(self.policy, "use_topological_memory", False):
+                self.policy.memory.reset()
             episode_steps = 0
             latent_state = th.zeros(
                 (self.env.num_envs, self.policy.latent_dim), device=self.policy.device

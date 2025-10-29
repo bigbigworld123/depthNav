@@ -16,7 +16,7 @@ empty_scene = {
 # !! 新增的、易于理解的辅助函数 !!
 # --------------------------------------------------------------------------
 
-WALL_HEIGHT = 5.0      # 您可以在这里统一修改墙壁的高度
+WALL_HEIGHT = 20.0    # 您可以在这里统一修改墙壁的高度
 WALL_THICKNESS = 0.2   # 您可以在这里统一修改墙壁的厚度
 FLOOR_THICKNESS = 0.1
 WALL_CENTER_Y = (FLOOR_THICKNESS / 2.0) + (WALL_HEIGHT / 2.0)

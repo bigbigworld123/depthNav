@@ -1,4 +1,4 @@
-# run_nav_level1.py (修改版)
+# examples/navigation/run_nav_level1.py
 
 from depthnav.scripts.runner import run_experiment
 
@@ -9,33 +9,34 @@ if __name__ == "__main__":
         "train_bptt.iterations",
     )
 
-    # for tensorboard
     run_params = {
         "level0": (False, "configs/box_2", 500),
-        "level1": (False, "configs/level_1", 13000),
+        "level1": (True, "configs/level_1", 20000),
     }
     base_config_files = [
         "examples/navigation/train_cfg/nav_empty.yaml",
         "examples/navigation/train_cfg/nav_levelX.yaml",
     ]
+    
+    # ===================== 核心修改 =====================
+    experiment_name = "topological_sru_v1" # 為您的新實驗命名
+    
     run_experiment(
         script="depthnav/scripts/train_bptt.py",
-        experiment_dir="examples/navigation/logs/level1_no_toa_no_yaw", # 建议使用新的日志目录
+        experiment_dir=f"examples/navigation/logs/{experiment_name}",
         config_keys=config_keys,
         run_params=run_params,
         base_config_files=base_config_files,
-
-        # ==========================================================
-        # !! 核心修改：将策略配置文件切换为 "small_no_yaw.yaml" !!
-        # ==========================================================
-        policy_config_file="examples/navigation/policy_cfg/small_no_yaw.yaml",
-
+        # ！！！ 加載您的新策略配置 ！！！
+        policy_config_file="examples/navigation/policy_cfg/topological_sru_policy.yaml",
         eval_configs=[
             "examples/navigation/eval_cfg/nav_level1.yaml",
         ],
+        # ！！！ 將評估結果保存到新文件 ！！！
         eval_csvs=[
-            "examples/navigation/logs/level1_no_toa_no_yaw/nav_level_1.csv",
+            f"examples/navigation/logs/{experiment_name}/nav_level_1.csv",
         ],
         curriculum=True,
         max_retries=5,
     )
+    # ====================================================

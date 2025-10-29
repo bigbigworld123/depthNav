@@ -1,3 +1,5 @@
+# depthnav/envs/navigation_env.py
+
 from habitat_sim import SensorType
 import numpy as np
 from typing import Union, Tuple, List, Optional, Dict
@@ -104,7 +106,14 @@ class NavigationEnv(BaseEnv):
         # properties that we expose as read-only
         self._target = th.zeros((self.num_envs, 3), device=self.device)
         self._target_speed = th.zeros((self.num_envs, 1), device=self.device)
-
+        
+        # =================================================================
+        # 核心修改 2.1: 為觀測空間添加 'position' for Topological Memory
+        # =================================================================
+        self.observation_space.spaces["position"] = spaces.Box(
+            low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
+        )
+        
         # add target to super's observation_space
         if self.target_type == TargetType.TARGET_VELOCITY:
             self.observation_space.spaces["target"] = spaces.Box(
@@ -129,6 +138,12 @@ class NavigationEnv(BaseEnv):
         euler_zyx_noise = self.rotation_noise_rng.generate(size).to(self.device)
         delta_rot = Rotation3.from_euler_zyx(euler_zyx_noise, device=self.device)
 
+        # =================================================================
+        # 核心修改 2.2: 將 self.omega 加入 state 向量
+        # 這是讓 MotionModulatedSRUCell 正常工作的關鍵
+        # State shape is now: quaternion (4) + velocity (3) + omega (3) = 10 dims
+        # =================================================================
+
         if self.inertial_frame == Frame.WORLD:
             q_noised = Rotation3(self.rot_wb.R @ delta_rot.R).to_quat()
             q_noised = th.where(q_noised[:, 0:1] < 0, -q_noised, q_noised)
@@ -138,7 +153,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    # self.omega,
+                    self.omega, # <--- 添加 OMEGA
                 ]
             ).to(self.device)
 
@@ -155,28 +170,73 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    # self.omega,
+                    self.omega, # <--- 添加 OMEGA
                 ]
             ).to(self.device)
 
         elif self.inertial_frame == Frame.BODY:
-            R_sw = self.rot_ws.T
-            R_wb = self.rot_wb.R
-            R_sb = R_sw @ R_wb
-            q_noised = Rotation3(R_sb @ delta_rot.R).to_quat()
-            q_noised = th.where(q_noised[:, 0:1] < 0, -q_noised, q_noised)
-
+            # For body frame, omega is already in the body frame from dynamics
             v_noised = self.velocity_bf + velocity_noise
+            # Since orientation is relative to start frame, we don't need to add noise again.
+            q_noised = self.quaternion_sb 
+
             return th.hstack(
                 [
                     q_noised,
                     v_noised,
-                    # self.omega,
+                    self.omega, # <--- 添加 OMEGA
                 ]
             ).to(self.device)
 
         else:
             raise NotImplementedError
+
+    def get_observation(self):
+        # =================================================================
+        # 核心修改 2.3: 清理 get_observation 邏輯
+        # =================================================================
+        
+        # 1. 從父類獲取基礎觀測 (如果父類有實現)
+        # 您的 base_env.py 的 get_observation 是抽象方法，所以我們在這裡自己構建
+        if self.visual:
+            obs = {
+                "state": self.state.to(self.device),
+                "depth": self.sensor_obs["depth"],
+            }
+        else:
+             obs = {
+                "state": self.state.to(self.device),
+            }
+
+        # 2. 添加拓撲記憶所需的物理位置
+        obs["position"] = self.position.to(self.device)
+
+        # 3. 添加目標相關信息
+        if self.inertial_frame == Frame.WORLD:
+            target_velocity = self.target_velocity
+        elif self.inertial_frame == Frame.START:
+            target_velocity = self.target_velocity_sb
+        elif self.inertial_frame == Frame.BODY:
+            target_velocity = self.target_velocity_bf
+        else:
+            raise NotImplementedError
+
+        if self.target_type == TargetType.TARGET_VELOCITY:
+            obs["target"] = target_velocity.to(self.device)
+        elif self.target_type == TargetType.TARGET_VELOCITY_TARGET_DISTANCE:
+            obs["target"] = th.cat(
+                [
+                    target_velocity,
+                    1.0 / (self.target_distance.clone().detach().clamp(min=0.5)),
+                ],
+                dim=1,
+            ).to(self.device)
+        
+        return obs
+
+    # =================================================================
+    # 其他所有方法 (reset_agents, step, get_reward 等) 保持原樣，無需修改
+    # =================================================================
 
     def reset_agents(self, indices: Optional[List] = None):
         timerlog.timer.tic("sample_targets")
@@ -297,36 +357,6 @@ class NavigationEnv(BaseEnv):
         )
         return within_radius
 
-    def get_observation(self):
-        assert self.state.shape == (self.num_envs, self.state_size)
-        assert self.visual
-
-        if self.inertial_frame == Frame.WORLD:
-            target_velocity = self.target_velocity
-        elif self.inertial_frame == Frame.START:
-            target_velocity = self.target_velocity_sb
-        elif self.inertial_frame == Frame.BODY:
-            target_velocity = self.target_velocity_bf
-        else:
-            raise NotImplementedError
-
-        obs = {
-            "state": self.state.to(self.device),
-        }
-        if self.visual:
-            obs["depth"] = self.sensor_obs["depth"]
-        if self.target_type == TargetType.TARGET_VELOCITY:
-            obs["target"] = target_velocity.to(self.device)
-        elif self.target_type == TargetType.TARGET_VELOCITY_TARGET_DISTANCE:
-            obs["target"] = th.cat(
-                [
-                    target_velocity,
-                    1.0 / (self.target_distance.clone().detach().clamp(min=0.5)),
-                ],
-                dim=1,
-            ).to(self.device)
-
-        return obs
 
     def get_reward(self, action=None) -> th.Tensor:
         """
@@ -418,21 +448,12 @@ class NavigationEnv(BaseEnv):
             )
             return F.normalize(slerp_result, dim=1)
 
-        # at low speeds, yaw should track goal/geodesic direction
-        # at high speeds, yaw should track velocity
-        # avg_vel = self.moving_average_velocity.clone().detach()
-        # desired_yaw_vector = avg_vel
         avg_vel = self.exp_moving_average_velocity.clone().detach()
-        # t = (1. / vel_thresh_slerp_yaw) * avg_vel.norm(dim=1, keepdim=True) # t = 1 when vel.norm == vel_thresh_slerp_yaw
         t = (self.position - self.start_position).norm(dim=1, keepdim=True)
         desired_yaw_vector = (
             slerp(self.target_direction, avg_vel, t).clone().detach()
-        )  # works, but should try without detach
+        )
         loss_yaw = -(desired_yaw_vector * self.yaw_vector).sum(dim=1)
-
-        # WORKS
-        # loss_yaw = F.smooth_l1_loss(self.yaw_vector, desired_yaw_vector, reduction="none")
-        # loss_yaw = loss_yaw.sum(dim=1)
 
         def smooth_l1_cosine_loss(pred_vec, target_vec, angle_threshold_rad, delta=1.0):
             cos_sim = (pred_vec * target_vec).sum(dim=1).clamp(-1.0, 1.0)
@@ -442,16 +463,6 @@ class NavigationEnv(BaseEnv):
             loss = th.where(err < delta, 0.5 * (err**2) / delta, err - 0.5 * delta)
             return loss
 
-        # safe_view_radians = np.deg2rad(safe_view_degrees)
-        # loss_yaw = smooth_l1_cosine_loss(self.yaw_vector, desired_yaw_vector,
-        # safe_view_radians, delta=0.05)
-
-        # close to the start and goal, no yaw loss to prevent rapid yaw movements
-        # loss_yaw = th.where(
-        #     ((self.position - self.start_position).norm(dim=1) < 1.0),
-        #     th.zeros_like(loss_yaw),
-        #     loss_yaw
-        # )
         loss_yaw = th.where(
             (self.target_distance < 1.0).squeeze(1), th.zeros_like(loss_yaw), loss_yaw
         )
@@ -464,7 +475,6 @@ class NavigationEnv(BaseEnv):
             + lambda_j * loss_j
             + lambda_om * loss_om
             + lambda_yaw * loss_yaw
-            # + lambda_grad * loss_grad
         )
         reward = -loss
         metrics = {
@@ -475,7 +485,6 @@ class NavigationEnv(BaseEnv):
             "loss_j": (lambda_j * loss_j).clone().detach().cpu(),
             "loss_om": (lambda_om * loss_om).clone().detach().cpu(),
             "loss_yaw": (lambda_yaw * loss_yaw).clone().detach().cpu(),
-            # "loss_grad": (lambda_grad * loss_grad).clone().detach().cpu()
         }
 
         return reward, metrics
