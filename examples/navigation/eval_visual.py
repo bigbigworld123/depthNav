@@ -42,13 +42,13 @@ def main(args):
     render_kwargs = {}
 
     # ==========================================================
-    # !! 核心修改 !!
+    # !! 您的自定義渲染設置 (已保留) !!
     # ==========================================================
     eval_config["scene_kwargs"]["render_settings"] = {
         "mode": "fix",
         "view": "top",
         # 1. 添加自定义相机高度，您可以调整这个值 (越小越近)
-        "camera_height": 16.0,
+        "camera_height": 45.0,
         # 2. 开启轨迹绘制功能
         "trajectory": True,
         "sensor_type": "color",
@@ -64,11 +64,24 @@ def main(args):
 
     policy_class = policy_aliases[config["policy_class"]]
     policy_kwargs = config["policy"]
+
+    # <<< START MODIFICATION 3.11: 傳遞 policy_kwargs (同 train_bptt.py) >>>
     if policy_class == MultiInputPolicy:
-        observation_space = env.observation_space
-        policy = policy_class(observation_space, **policy_kwargs)
+        policy = policy_class(
+            env.observation_space, 
+            net_arch=policy_kwargs["net_arch"],
+            activation_fn=policy_kwargs["activation_fn"],
+            output_activation_fn=policy_kwargs["output_activation_fn"],
+            feature_extractor_class=policy_kwargs["feature_extractor_class"],
+            policy_kwargs=policy_kwargs, # <--- 傳遞完整的 policy 字典
+            output_activation_kwargs=policy_kwargs.get("output_activation_kwargs"),
+            feature_extractor_kwargs=policy_kwargs.get("feature_extractor_kwargs"),
+            device=policy_kwargs.get("device", "cuda")
+        )
+    # <<< END MODIFICATION 3.11 >>>
     else:
         policy = policy_class(**policy_kwargs)
+        
     policy.load(args.weight)
     policy.eval()
 
@@ -166,21 +179,37 @@ class Evaluate:
         self.first_collision = th.zeros(self.env.num_envs, dtype=th.bool)
         self.done = th.zeros(self.env.num_envs, dtype=th.bool)
         
-        latent_state = th.zeros(
-            (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
-        )
+        # <<< START MODIFICATION 3.19: 初始化可視化評估時的隱藏狀態元組 >>>
+        if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+            K, H = self.policy.attention_history_shape
+            h_t = th.zeros((self.env.num_envs, H), device=self.policy.device)
+            history_buffer = th.zeros((self.env.num_envs, K, H), device=self.policy.device)
+            latent_tuple = (h_t, history_buffer)
+        elif self.policy.is_recurrent:
+            latent_state = th.zeros(
+                (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
+            )
+        # <<< END MODIFICATION 3.19 >>>
         
         while True:
             start = time.time()
             obs = observation_to_device(self.env.get_observation(), self.policy.device)
+            
+            # <<< START MODIFICATION 3.20: 更新可視化評估時的 Policy 調用 >>>
             if type(self.policy) == MultiInputPolicy:
-                if self.policy.is_recurrent:
+                if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                    action, latent_tuple = self.policy(obs, latent_tuple)
+                elif self.policy.is_recurrent:
                     action, latent_state = self.policy(obs, latent_state)
                 else:
                     action = self.policy(obs)
             else:
                 action = self.policy(obs["state"])
+            # <<< END MODIFICATION 3.20 >>>
+            
             obs, reward, terminated, infos = self.env.step(action, is_test=True)
+            # 确保terminated张量与模型在同一设备上
+            terminated = terminated.to(self.policy.device)
             self.first_collision = self.env.is_collision & ~self.collided
             self.collided = self.collided | self.env.is_collision
 
@@ -196,9 +225,22 @@ class Evaluate:
                     wait_ms = max(int(1000 * (self.env.dynamics.ctrl_dt - elapsed)), 1)
                     cv2.waitKey(wait_ms)
             
+            # <<< START MODIFICATION 3.21: 在可視化時重置隱藏狀態元組(掩碼) >>>
+            # 確保terminated在正確的設備上
+            terminated = terminated.to(self.policy.device)
+            if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                h_t, history_buffer = latent_tuple
+                h_t = h_t * ~terminated.unsqueeze(1)
+                history_buffer = history_buffer * ~terminated.unsqueeze(1).unsqueeze(2)
+                latent_tuple = (h_t, history_buffer)
+            elif self.policy.is_recurrent:
+                 latent_state = latent_state * ~terminated.unsqueeze(1)
+            # <<< END MODIFICATION 3.21 >>>
+
             if terminated.all():
                 break
 
+    # (您的自定義 render 方法已保留)
     def render(self, render_list, dones):
         for i, (render, done) in enumerate(zip(render_list, dones)):
             row = i // self.num_cols
@@ -218,6 +260,7 @@ class Evaluate:
                 ] = render
         self.all_frames.append(np.copy(self.render_grid))
 
+    # (您的自定義 tint_red 方法已保留)
     @staticmethod
     def tint_red(image, alpha=0.3):
         red_overlay = np.zeros_like(image)

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import sys
 import time
@@ -85,6 +86,8 @@ class BPTT:
             "max_acceleration",
             "max_yaw_rate",
             "avg_min_obstacle_distance",
+            "total_energy_proxy", # <<< 確保能耗指標被記錄 >>>
+            "reward_avoid", # <<< 確保避障獎勵被記錄 >>>
         ]
 
         self.whitelisted_csv_keys = [
@@ -96,6 +99,7 @@ class BPTT:
             "max_speed",
             "avg_path_length",
             "avg_control_effort",
+            "total_energy_proxy", # <<< 確保能耗指標被記錄 >>>
             "max_acceleration",
             "avg_yaw_rate",
             "max_yaw_rate",
@@ -135,9 +139,19 @@ class BPTT:
         try:
             self.env.reset()
             episode_steps = 0
-            latent_state = th.zeros(
-                (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
-            )
+            
+            # <<< START MODIFICATION 3.12: 初始化隱藏狀態元組 >>>
+            if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                K, H = self.policy.attention_history_shape
+                h_t = th.zeros((self.env.num_envs, H), device=self.policy.device)
+                history_buffer = th.zeros((self.env.num_envs, K, H), device=self.policy.device)
+                latent_tuple = (h_t, history_buffer)
+            elif self.policy.is_recurrent:
+                latent_state = th.zeros(
+                    (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
+                )
+            # <<< END MODIFICATION 3.12 >>>
+
             for iter in tqdm(range(self.iterations)):
                 timerlog.timer.tic("iteration")
 
@@ -152,18 +166,32 @@ class BPTT:
                 if episode_steps >= self.env.max_episode_steps:
                     self.env.reset()
                     episode_steps = 0
+                    
+                    # <<< START MODIFICATION 3.12.1: 重置隱藏狀態元組 >>>
+                    if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                        h_t.zero_()
+                        history_buffer.zero_()
+                        latent_tuple = (h_t, history_buffer)
+                    elif self.policy.is_recurrent:
+                        latent_state.zero_()
+                    # <<< END MODIFICATION 3.12.1 >>>
 
                 # rollout policy over horizon steps
                 for t in range(self.horizon):
                     obs = self.env.get_observation()
                     obs = observation_to_device(obs, self.policy.device)
+                    
+                    # <<< START MODIFICATION 3.13: 更新 Policy 調用 >>>
                     if type(self.policy) == MlpPolicy:
                         actions = self.policy(obs["state"])
                     else:
-                        if self.policy.is_recurrent:
+                        if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                            actions, latent_tuple = self.policy(obs, latent_tuple)
+                        elif self.policy.is_recurrent:
                             actions, latent_state = self.policy(obs, latent_state)
                         else:
                             actions = self.policy(obs)
+                    # <<< END MODIFICATION 3.13 >>>
 
                     # step
                     obs, reward, done, info = self.env.step(actions, is_test=False)
@@ -173,20 +201,28 @@ class BPTT:
 
                     # if done, reset discount factor and latents
                     discount_factor = discount_factor * self.gamma * ~done + done
-                    latent_state = latent_state * ~done.unsqueeze(1)
                     
-                    # Detach tensors to prevent computation graph accumulation
-                    if isinstance(actions, th.Tensor):
-                        actions = actions.detach()
-                    if isinstance(reward, th.Tensor):
-                        reward = reward.detach()
-                    if isinstance(done, th.Tensor):
-                        done = done.detach()
+                    # <<< START MODIFICATION: 修复隐藏状态的in-place操作 >>>
+                    # 修复隐藏状态元组的重置操作，避免in-place修改
+                    if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                        h_t, history_buffer = latent_tuple
+                        # 使用非in-place操作重置已完成episode的隐藏状态
+                        done_mask = done.unsqueeze(1)
+                        h_t = th.where(done_mask, th.zeros_like(h_t), h_t)
+                        done_mask_history = done.unsqueeze(1).unsqueeze(2)
+                        history_buffer = th.where(done_mask_history, th.zeros_like(history_buffer), history_buffer)
+                        latent_tuple = (h_t, history_buffer)
+                    elif self.policy.is_recurrent:
+                        # 使用非in-place操作重置已完成episode的隐藏状态
+                        done_mask = done.unsqueeze(1)
+                        latent_state = th.where(done_mask, th.zeros_like(latent_state), latent_state)
+                    # <<< END MODIFICATION >>>
                     
-                    # Explicitly detach observation tensors to prevent memory buildup
-                    for key in obs:
-                        if isinstance(obs[key], th.Tensor):
-                            obs[key] = obs[key].detach()
+                    # <<< START MODIFICATION 3.15: 移除錯誤的 detach >>>
+                    # (您在 BPTT 循環內部添加的 detach() 調用已被移除)
+                    # (例如: actions = actions.detach(), reward = reward.detach(), 等)
+                    # (這些調用會切斷 BPTT 的計算圖，必須移除)
+                    # <<< END MODIFICATION 3.15 >>>
 
                 episode_steps += self.horizon
                 total_steps = self.env.num_envs * self.horizon
@@ -206,15 +242,28 @@ class BPTT:
                 grad_norm = th.nn.utils.clip_grad_norm_(
                     self.policy.parameters(), max_norm=max_norm
                 )
-                print(f"grad norm = {grad_norm:.4f}")
+                # (移除了 print 語句以保持日誌清潔，您可以加回來)
+                # print(f"grad norm = {grad_norm:.4f}")
 
                 # update policy
                 self.optimizer.step()
                 self.lr_schedule.step()
 
-                # detach gradients properly
+                # detach gradients properly (在 backward() 之後)
                 self.env.detach()
-                latent_state = latent_state.detach()
+                
+                # <<< START MODIFICATION: 修复隐藏状态的detach操作 >>>
+                # 修复隐藏状态元组的detach操作，避免in-place修改
+                if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                    h_t, history_buffer = latent_tuple
+                    h_t = h_t.detach()
+                    history_buffer = history_buffer.detach()
+                    latent_tuple = (h_t, history_buffer)
+                elif self.policy.is_recurrent:
+                    latent_state = latent_state.detach()
+                # <<< END MODIFICATION >>>
+
+                # (保留您添加的正確的 detach)
                 loss = loss.detach()
                 discount_factor = discount_factor.detach()
                 
@@ -238,9 +287,15 @@ class BPTT:
                         )
 
                         # add a column to log the scene
-                        df["scene"] = os.path.basename(
-                            self.env.scene_manager.scene_path
-                        )
+                        # <<< MODIFICATION 3.17: 添加 hasattr 檢查 >>>
+                        if hasattr(self.env, "scene_manager") and self.env.scene_manager is not None and hasattr(self.env.scene_manager, "scene_path"):
+                             df["scene"] = os.path.basename(
+                                 self.env.scene_manager.scene_path
+                             )
+                        else:
+                             df["scene"] = "N/A" # 處理沒有 scene_manager 的情況
+                        # <<< END MODIFICATION 3.17 >>>
+
 
                         # log the df to tensorboard
                         basename = os.path.basename(csv_file).split(".")[0]

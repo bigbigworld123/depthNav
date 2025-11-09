@@ -53,7 +53,8 @@ class BaseEnv:
         self._collision_dis = None
         self._collision_point = None
         self._collision_vector = None
-
+        # 记录上一次碰撞距离，用于计算碰撞奖励
+        self._last_collision_dis = th.zeros((self.num_envs,), device=self.device)
         # state
         self._step_count = th.zeros((self.num_envs,), dtype=th.int32)
         self._reward = th.zeros((self.num_envs,))
@@ -102,7 +103,6 @@ class BaseEnv:
         )
         self._visual_sensor_list = [s for s in self._sensor_list if "IMU" not in s]
         self._sensor_kwargs = sensor_kwargs
-
         # NOTE self.state_size depends on state property which can be overridden
         if visual:
             self.observation_space = spaces.Dict(
@@ -478,6 +478,11 @@ class BaseEnv:
 
     @timerlog.timer.timed
     def update_collision(self, indices: Optional[List[int]] = None):
+        if self._collision_dis is not None:
+            self._last_collision_dis = self._collision_dis.clone().detach()
+        else:
+            # 首次调用时初始化为较大值
+            self._last_collision_dis = th.ones(self.num_envs, device=self.device) * 100.0
         if not self.visual:
             if indices is None or self._collision_point is None:
                 # get the index of the closest bound from the current position
@@ -537,17 +542,35 @@ class BaseEnv:
 
     def geodesic_cost(self, positions):
         if self.single_env:
+            # single_env: True -> 所有 N 個智能體都在 scene 0
             cost = self.scene_manager.interpolate_geodesic(0, positions, gradient=False)
             cost = cost.squeeze(-1)
         else:
-            raise NotImplementedError
+            # single_env: False -> 智能體 i 在 scene i
+            costs = []
+            for i in range(self.num_envs):
+                # 獲取智能體 i 的位置 (形狀 [1, 3])
+                pos_i = positions[i].unsqueeze(0)
+                # 使用 scene_id = i 進行插值
+                cost_i = self.scene_manager.interpolate_geodesic(i, pos_i, gradient=False)
+                costs.append(cost_i)
+            cost = th.cat(costs, dim=0).squeeze(-1)
         return cost
 
     def geodesic_gradient(self, positions):
         if self.single_env:
-            gradient = self.scene_manager.interpolate_geodesic(0, positions)
+            # single_env: True -> 所有 N 個智能體都在 scene 0
+            gradient = self.scene_manager.interpolate_geodesic(0, positions, gradient=True)
         else:
-            raise NotImplementedError
+            # single_env: False -> 智能體 i 在 scene i
+            gradients = []
+            for i in range(self.num_envs):
+                # 獲取智能體 i 的位置 (形狀 [1, 3])
+                pos_i = positions[i].unsqueeze(0)
+                # 使用 scene_id = i 進行插值
+                grad_i = self.scene_manager.interpolate_geodesic(i, pos_i, gradient=True)
+                gradients.append(grad_i)
+            gradient = th.cat(gradients, dim=0)
         return gradient
 
     @property

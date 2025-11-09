@@ -1,0 +1,88 @@
+# examples/navigation/eval_cfg/test_spawn_locations.yaml
+env_class: navigation_env
+env:
+  # 运行4个环境实例，以便同时看到4个不同的随机出生点
+  num_envs: 4
+  seed: 42
+  visual: True
+  # eval_visual.py 脚本要求 single_env: False
+  single_env: False 
+  base_action: [0., 0., 0.]
+  robot_radius: 0.25
+
+  # --- 这是您要测试的核心配置 ---
+  random_kwargs:
+    safe_spawn_radius: 0.1
+    min_starting_distance_to_target: 21.0 
+    
+    # 出生点 (外部圆环)
+    position:
+      class: cylinder
+      mean: [0., 0., 1.5]
+      half: [21.0, 21.0, 1.0] # 41m 半径
+    
+    # 将初始速度设为0，以便观察
+    velocity:
+      class: uniform
+      mean: [0., 0., 0.]
+      half: [0.0, 0.0, 0.0] 
+    rotation:
+      class: normal 
+      mean: [0., 0., 0.]
+      half: [0., 0., 3.14] # 随机初始朝向
+      
+    # 目标点 (中心)
+    target:
+      class: uniform
+      mean: [0., 0., 1.5] # 固定在 (0,0,1.5)
+      half: [0., 0., 0.]
+      
+    target_speed: 
+      class: uniform
+      mean: [3.]
+      half: [2.]
+    # 关闭噪声和重力以便清晰观察
+    velocity_noise:
+      class: normal
+      mean: [0., 0., 0.]
+      half: [0.0, 0.0, 0.0]
+    rotation_noise:
+      class: normal 
+      mean: [0., 0., 0.]
+      half: [0.0, 0.0, 0.0]
+    gravity:
+      class: normal
+      mean: [0., 0., -9.81]
+      half: [0., 0., 0.0]
+  # --- 测试配置结束 ---
+
+  dynamics_kwargs:
+    action_type: thrust_world_frame
+    dt: 0.02
+    ctrl_dt: 0.02
+    ctrl_delay: 0.0
+    enable_ctrl_smoothing: True
+  
+  # --- 关键：加载您的新地图 ---
+  scene_kwargs:
+    path: configs/level_1/ring_layered_large
+    reload_scenes: True
+    load_geodesics: False # 评估时不需要
+    spawn_obstacles: False
+  
+  sensor_kwargs:
+    - sensor_type: depth
+      uuid: depth
+      resolution: [72, 128]
+      position: [0.1, -0.02, -0.04]
+      orientation: [0, 0, 0]
+      far: 50. # 增加far clip，因为我们的地图很大
+      near: 0.05
+  target_kwargs:
+    success_radius: 0.1
+  reward_kwargs:
+    lambda_c: 0 # 测试时我们不关心奖励
+    lambda_v: 0
+  # 运行几秒钟，然后自动重置
+  max_episode_steps: 1000 
+  device: cpu

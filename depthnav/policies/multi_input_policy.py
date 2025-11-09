@@ -1,5 +1,6 @@
 import torch as th
 from torch import nn
+import torch.nn.functional as F
 from typing import Type, Optional, Dict, Any, Union, List
 from gymnasium import spaces
 
@@ -60,89 +61,184 @@ class MultiInputPolicy(MlpPolicy):
         net_arch: Dict[str, List[int]],
         activation_fn: Union[str, nn.Module],
         output_activation_fn: Union[str, nn.Module],
-        feature_extractor_class: Type[FeatureExtractor],
+        feature_extractor_class: Type[FeatureExtractor], # <<< 修正：添加缺失的參數
+        policy_kwargs: Dict[str, Any],
         output_activation_kwargs: Optional[Dict[str, Any]] = None,
         feature_extractor_kwargs: Optional[Dict[str, Any]] = None,
         device: th.device = "cuda",
     ):
+        
+        # ================================================================
+        # <<< START REFACTORING: 錯誤修復 >>>
+        #
+        # 1. DO NOT CALL SUPER() YET.
+        # 我們必須首先計算 mlp_in_dim (MlpPolicy 的輸入維度)
+        # ================================================================
+        
         if isinstance(feature_extractor_class, str):
             feature_extractor_class = self.feature_extractor_alias[
                 feature_extractor_class
             ]
         feature_extractor_kwargs = feature_extractor_kwargs or {}
         
-        self.use_motion_modulation = feature_extractor_kwargs.pop("use_motion_modulation", False)
+        # (獲取標記，但還不要分配 nn.Module)
+        use_motion_modulation = feature_extractor_kwargs.pop("use_motion_modulation", False)
 
-
-        # get the size of features_dim before initializing MlpPolicy
-        feature_extractor = feature_extractor_class(
+        # (在本地初始化 feature_extractor 以獲取其維度)
+        _feature_extractor = feature_extractor_class(
             observation_space, **feature_extractor_kwargs
         )
-        feature_norm = nn.LayerNorm(feature_extractor.features_dim)
+        features_dim = _feature_extractor.features_dim
 
-        # add recurrent layer after feature_extractor
+        # --- Recurrent & Attention Logic (用於計算 mlp_in_dim) ---
         _is_recurrent = False
+        use_temporal_attention = policy_kwargs.get("use_temporal_attention", False)
+        attention_k_steps = policy_kwargs.get("attention_k_steps", 10)
+        
+        recurrent_extractor_instance = None # 佔位符
+        W_q_instance = None
+        W_k_instance = None
+        W_v_instance = None
+        
         if net_arch.get("recurrent", None) is not None:
             _is_recurrent = True
             rnn_setting = net_arch.get("recurrent")
-            rnn_class = rnn_setting.get("class")
+            rnn_class_str = rnn_setting.get("class")
             kwargs = rnn_setting.get("kwargs")
+            
+            if isinstance(rnn_class_str, str):
+                rnn_class = self.recurrent_alias[rnn_class_str]
 
-            if isinstance(rnn_class, str):
-                rnn_class = self.recurrent_alias[rnn_class]
+            # (在本地初始化，還不要分配給 self)
+            recurrent_extractor_instance = rnn_class(
+                input_size=features_dim, **kwargs
+            ).to(device) # .to(device) 很重要
+            
+            hidden_size = kwargs.get("hidden_size")
+            _latent_dim = hidden_size
 
-            recurrent_extractor = rnn_class(
-                input_size=feature_extractor.features_dim, **kwargs
-            )
-            in_dim = kwargs.get("hidden_size")
+            if use_temporal_attention:
+                # (在本地初始化)
+                W_q_instance = nn.Linear(hidden_size, hidden_size).to(device)
+                W_k_instance = nn.Linear(hidden_size, hidden_size).to(device)
+                W_v_instance = nn.Linear(hidden_size, hidden_size).to(device)
+                
+                mlp_in_dim = hidden_size * 2 # [h_t, context]
+            else:
+                mlp_in_dim = hidden_size # [h_t]
         else:
-            in_dim = feature_extractor.features_dim
-
+            mlp_in_dim = features_dim # 非循環
+            _latent_dim = 0
+        
+        # ================================================================
+        # 2. NOW CALL SUPER().__INIT__()
+        # (現在調用父構造函數是安全的)
+        # ================================================================
         super().__init__(
-            in_dim,
+            mlp_in_dim,
             net_arch,
             activation_fn,
             output_activation_fn,
             output_activation_kwargs,
             device,
         )
-
-        self.feature_extractor = feature_extractor
-        self.feature_norm = feature_norm
-        if _is_recurrent:
-            self._is_recurrent = True
-            self._latent_dim = in_dim
-            self.recurrent_extractor = recurrent_extractor
-
+        
+        # ================================================================
+        # 3. NOW ASSIGN ALL nn.Module ATTRIBUTES
+        # (super() 已經運行, self._modules 已初始化)
+        # ================================================================
+        self.feature_extractor = _feature_extractor
+        self.feature_norm = nn.LayerNorm(features_dim).to(device)
+        
+        self.use_motion_modulation = use_motion_modulation
         if self.use_motion_modulation:
-            # 运动信息维度为6 (3维线速度 + 3维角速度)
-            ego_motion_dim = 6 
-            # 调节器的输出维度必须和特征提取器的输出维度一致
-            features_dim = feature_extractor.features_dim
-            
+            motion_input_dim = 6 
+            modulation_layer_size = 64
+            # (現在分配是安全的)
             self.motion_modulator = nn.Sequential(
-                nn.Linear(ego_motion_dim, features_dim),
-                nn.Sigmoid() # 使用Sigmoid将输出缩放到0-1之间，作为门控信号
+                nn.Linear(motion_input_dim, modulation_layer_size),
+                nn.LeakyReLU(),
+                nn.Linear(modulation_layer_size, features_dim),
+                nn.Sigmoid(),
             ).to(device)
+
+        self._is_recurrent = _is_recurrent
+        self._latent_dim = _latent_dim
+        self.use_temporal_attention = use_temporal_attention
+        self.attention_k_steps = attention_k_steps
+        
+        if self._is_recurrent:
+            # (現在分配是安全的)
+            self.recurrent_extractor = recurrent_extractor_instance
+        
+        if self.use_temporal_attention:
+            # (現在分配是安全的)
+            self.W_q = W_q_instance
+            self.W_k = W_k_instance
+            self.W_v = W_v_instance
+        
+        # <<< END REFACTORING >>>
+
 
     def forward(self, obs, latent=None):
         features = self.feature_extractor(obs)
         features = self.feature_norm(features)
+        
         if self.use_motion_modulation:
-            # 从 state 观测中提取运动信息 (后6个维度)
-            # state 格式: [quat(4), lin_vel(3), ang_vel(3)], 所以取最后6维
+            # 從 state 觀測中提取運動信息 (後6個維度)
             ego_motion = obs["state"][:, -6:]
             
-            # 通过调节器生成门控信号
+            # 通過調節器生成門控信號
             modulation_gate = self.motion_modulator(ego_motion)
             
-            # 将门控信号与特征逐元素相乘，实现调节
+            # 將門控信號與特徵逐元素相乘，實現調節
             features = features * modulation_gate
             
-        if self.is_recurrent:
+        if self.is_temporal_attention:
+            # latent 此時是一個元組 (h_prev, history_buffer_prev)
+            h_prev, history_buffer_prev = latent
+            
+            # 1. GRU Step: 得到當前隱藏狀態 h_t
+            h_t = self.recurrent_extractor(features, h_prev)
+            
+            # 2. Attention Step
+            query = self.W_q(h_t.unsqueeze(1)) # (B, 1, H)
+            keys = self.W_k(history_buffer_prev)     # (B, K, H)
+            values = self.W_v(history_buffer_prev)   # (B, K, H)
+            
+            attn_scores = th.bmm(query, keys.transpose(-1, -2)) # (B, 1, K)
+            attn_dist = F.softmax(attn_scores, dim=-1)         # (B, 1, K)
+            
+            context = th.bmm(attn_dist, values).squeeze(1)     # (B, H)
+            
+            # 3. Concatenate (TA_state)
+            ta_state = th.cat([h_t, context], dim=-1)
+            
+            # 4. Final MLP
+            actions = super().forward(ta_state)
+            
+            # 5. 更新歷史緩衝區
+            new_history_buffer = th.cat([h_t.unsqueeze(1), history_buffer_prev[:, :-1, :]], dim=1)
+            
+            # 6. 返回新的狀態元組
+            return actions, (h_t, new_history_buffer)
+
+        elif self.is_recurrent:
+            # 原始 GRU 邏輯 (latent 是 h_prev)
             latent = self.recurrent_extractor(features, latent)
             actions = super().forward(latent)
             return actions, latent
 
+        # 非循環邏輯
         actions = super().forward(features)
         return actions
+        
+    @property
+    def is_temporal_attention(self):
+        """標記是否啟用時間注意力"""
+        return self._is_recurrent and self.use_temporal_attention
+
+    @property
+    def attention_history_shape(self):
+        """返回 (K, H) 以便 BPTT 初始化緩衝區"""
+        return (self.attention_k_steps, self._latent_dim)

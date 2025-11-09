@@ -1,0 +1,74 @@
+# examples/navigation/train_cfg/nav_level_3_tri_ring.yaml
+env_class: navigation_env
+env:
+  num_envs: 16
+  seed: 42
+  visual: True
+  single_env: True
+  robot_radius: 0.3
+  random_kwargs:
+    safe_spawn_radius: 0.1
+    min_starting_distance_to_target: 20.0 # 至少40米
+    
+    # --- 出生点 (三环外部) ---
+    position:
+      class: cylinder
+      mean: [0., 0., 1.5]
+      half: [21.5, 21.5, 1.0] # 在21m半径的圆环上出生
+    
+    # ... (其余 random_kwargs, dynamics_kwargs, sensor_kwargs 同 L2) ...
+    velocity: {class: uniform, mean: [0., 0., 0.], half: [0.5, 0.5, 0.5]}
+    rotation: {class: normal, mean: [0., 0., 0.], half: [0., 0., 3.14]}
+    target: {class: uniform, mean: [0., 0., 1.5], half: [0., 0., 0.]} # 目标在中心
+    target_speed: {class: uniform, mean: [3.], half: [2.]}
+    velocity_noise: {class: normal, mean: [0., 0., 0.], half: [0.05, 0.05, 0.05]}
+    rotation_noise: {class: normal, mean: [0., 0., 0.], half: [0.02, 0.02, 0.02]}
+    gravity: {class: normal, mean: [0., 0., -9.81], half: [0., 0., 1.5]}
+  dynamics_kwargs: {action_type: thrust_world_frame, dt: 0.02, ctrl_dt: 0.02, ctrl_delay: 0.0, grad_decay: 0.92, avg_velocity_window_dt: 2.0, vel_smoothing_factor: 0.8, exp_smoothing_factor: 12., enable_ctrl_smoothing: False, enable_air_drag: False, air_drag_theta_1: 0.1, air_drag_theta_2: 0.1}
+
+  # --- 加载 L3 地图 ---
+  scene_kwargs:
+    path: configs/curriculum/level_3_tri_ring # <--- L3 地图
+    reload_scenes: True
+    load_geodesics: False # <--- 启用测地线
+    spawn_obstacles: False
+    
+  sensor_kwargs:
+    - {sensor_type: depth, uuid: depth, resolution: [72, 128], position: [0.1, -0.02, -0.04], orientation: [0, 0, 0], far: 30.0, near: 0.25} # 视距30m
+  target_kwargs: {success_radius: 0.1}
+  reward_kwargs:
+    beta_1: 2.5
+    beta_2: -6 
+    lambda_v: 4     # <<< (修復) 降低速度獎勵
+    lambda_c: 6    # <<< (修復) 提高碰撞懲罰
+    lambda_a: 0.01
+    lambda_j: 0.001
+    lambda_om: 0.3
+    lambda_yaw: 4.0     # (D-RAPF 更智能，可以提高偏航跟隨的權重)
+    lambda_vmax: 1.0
+    falloff_dis: 1.0
+    # (創新點 1 的參數)
+    avoidance_reward_value: 1.0
+    avoidance_check_dis: 1.0
+    avoidance_dis_gain: 0.5
+    
+    # <<< START MODIFICATION 4.8: D-RAPF 參數 >>>
+    k_att_base: 4.0      # 吸引力基礎權重
+    k_rep_base: 6.0     # 排斥力基礎權重 (應高於 k_att)
+    k_rot_base: 2.0      # 旋轉力基礎權重 [cite: 263, 283]
+    rapf_max_threat: 200.0 # 用於歸一化 $\rho$ 的估計最大威脅值
+    # <<< END MODIFICATION 4.8 >>>
+  max_episode_steps: 900
+  device: cpu
+
+train_bptt:
+  iterations: 5000 # 默认 5000 步
+  learning_rate_init: 0.001
+  learning_rate_final: 0.0005
+  weight_decay: 0.01
+  horizon: 150
+  gamma: 1.0
+  log_interval: 100
+  checkpoint_interval: 500
+  early_stop_reward_threshold: -150
+  device: cuda

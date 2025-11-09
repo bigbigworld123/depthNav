@@ -45,11 +45,25 @@ def main(args):
 
     policy_class = policy_aliases[config["policy_class"]]
     policy_kwargs = config["policy"]
+    
+    # <<< START MODIFICATION 3.11: (Fix) 傳遞 policy_kwargs (同 train_bptt.py) >>>
+    # 這是為了修復加載時間注意力模型
     if policy_class == MultiInputPolicy:
-        observation_space = env.observation_space
-        policy = policy_class(observation_space, **policy_kwargs)
+        policy = policy_class(
+            env.observation_space, 
+            net_arch=policy_kwargs["net_arch"],
+            activation_fn=policy_kwargs["activation_fn"],
+            output_activation_fn=policy_kwargs["output_activation_fn"],
+            feature_extractor_class=policy_kwargs["feature_extractor_class"],
+            policy_kwargs=policy_kwargs, # <--- 傳遞完整的 policy 字典
+            output_activation_kwargs=policy_kwargs.get("output_activation_kwargs"),
+            feature_extractor_kwargs=policy_kwargs.get("feature_extractor_kwargs"),
+            device=policy_kwargs.get("device", "cuda")
+        )
+    # <<< END MODIFICATION 3.11 >>>
     else:
         policy = policy_class(**policy_kwargs)
+        
     policy.load(args.weight)
     policy.eval()
 
@@ -99,6 +113,7 @@ class Evaluate:
             "max_yaw_rate": [],
             "avg_min_obstacle_distance": [],
             "avg_control_effort": [],
+            "total_energy_proxy": [], # (已保留)
             "last_action_x": [],
             "last_action_y": [],
             "last_action_z": [],
@@ -115,12 +130,20 @@ class Evaluate:
             self.env.reset()
             batch_stats = self.single_rollout(render=render)
             for key, value in all_stats.items():
-                value.extend(batch_stats[key])
+                # 確保 batch_stats[key] 是一個列表
+                if isinstance(batch_stats[key], list):
+                    value.extend(batch_stats[key])
+                else:
+                    # 如果不是列表（例如，如果 num_envs=1 時的錯誤），則包裝它
+                    value.append(batch_stats[key])
+
 
         self.env.close()
 
+        # <<< START MODIFICATION 3.20: (Fix) 強制轉換為 float32 >>>
         # convert lists to tensors
-        all_stats = {key: th.tensor(value) for key, value in all_stats.items()}
+        all_stats = {key: th.tensor(value, dtype=th.float32) for key, value in all_stats.items()}
+        # <<< END MODIFICATION 3.20 >>>
 
         # summarize the rollout stats in a dataframe
         num_trials = num_rollouts * self.env.num_envs
@@ -142,6 +165,7 @@ class Evaluate:
                 "avg_path_length": all_stats["path_length"].mean().item(),
                 "std_path_length": all_stats["path_length"].std().item(),
                 "avg_control_effort": all_stats["avg_control_effort"].mean().item(),
+                "total_energy_proxy": all_stats["total_energy_proxy"].mean().item(), # (已保留)
                 "avg_yaw_rate": all_stats["avg_yaw_rate"].mean().item(),
                 "max_yaw_rate": all_stats["max_yaw_rate"].mean().item(),
                 "avg_min_obstacle_distance": all_stats["avg_min_obstacle_distance"]
@@ -152,7 +176,7 @@ class Evaluate:
                 "last_action_z": all_stats["last_action_z"].mean().item(),
                 "last_action_yaw": all_stats["last_action_yaw"].mean().item(),
                 "last_position_x": all_stats["last_position_x"].mean().item(),
-                "last_position_y": all_stats["last_position_y"].mean().item(),
+                "last_position_y": all_stats["last_position_y"].mean().item(), # <<< 錯誤發生行
                 "last_position_z": all_stats["last_position_z"].mean().item(),
                 "last_velocity_x": all_stats["last_velocity_x"].mean().item(),
                 "last_velocity_y": all_stats["last_velocity_y"].mean().item(),
@@ -165,6 +189,7 @@ class Evaluate:
     @th.no_grad()
     def single_rollout(self, render=False):
         # For each agent in the batch
+        # <<< START MODIFICATION 3.19: (Fix) 將所有 0 改為 0.0 >>>
         agent_logs = [
             {
                 "position": [],
@@ -174,40 +199,59 @@ class Evaluate:
                 "jerk": [],
                 "yaw_rate": [],
                 "obstacle_distance": [],
-                "success": 0,
-                "collision": 0,
-                "timeout": 0,
-                "avg_reward": 0,
-                "duration": 0,
-                "steps": 0,
-                "last_action_x": 0,
-                "last_action_y": 0,
-                "last_action_z": 0,
-                "last_action_yaw": 0,
-                "last_position_x": 0,
-                "last_position_y": 0,
-                "last_position_z": 0,
-                "last_velocity_x": 0,
-                "last_velocity_y": 0,
-                "last_velocity_z": 0,
+                "success": 0.0,
+                "collision": 0.0,
+                "timeout": 0.0,
+                "avg_reward": 0.0,
+                "duration": 0.0,
+                "steps": 0.0,
+                "path_length": 0.0,
+                "avg_control_effort": 0.0,
+                "total_energy_proxy": 0.0,
+                "last_action_x": 0.0,
+                "last_action_y": 0.0,
+                "last_action_z": 0.0,
+                "last_action_yaw": 0.0,
+                "last_position_x": 0.0,
+                "last_position_y": 0.0,
+                "last_position_z": 0.0,
+                "last_velocity_x": 0.0,
+                "last_velocity_y": 0.0,
+                "last_velocity_z": 0.0,
             }
             for _ in range(self.env.num_envs)
         ]
+        # <<< END MODIFICATION 3.19 >>>
 
         eval_info_id_list = [i for i in range(self.env.num_envs)]
 
-        latent_state = th.zeros(
-            (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
-        )
+        # <<< START MODIFICATION 3.16: 初始化隱藏狀態元組 >>>
+        if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+            K, H = self.policy.attention_history_shape
+            h_t = th.zeros((self.env.num_envs, H), device=self.policy.device)
+            history_buffer = th.zeros((self.env.num_envs, K, H), device=self.policy.device)
+            latent_tuple = (h_t, history_buffer)
+        elif self.policy.is_recurrent:
+            latent_state = th.zeros(
+                (self.env.num_envs, self.policy.latent_dim), device=self.policy.device
+            )
+        # <<< END MODIFICATION 3.16 >>>
+        
         while True:
             obs = observation_to_device(self.env.get_observation(), self.policy.device)
+            
+            # <<< START MODIFICATION 3.17: 更新評估時的 Policy 調用 >>>
             if type(self.policy) == MultiInputPolicy:
-                if self.policy.is_recurrent:
-                    action, latent_state = self.policy(obs, latent_state)
+                if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                    action, latent_tuple = self.policy(obs, latent_tuple)
+                elif self.policy.is_recurrent:
+                    action, latent_state = self.policy(obs, latent_tuple)
                 else:
                     action = self.policy(obs)
             else:
                 action = self.policy(obs["state"])
+            # <<< END MODIFICATION 3.17 >>>
+            
             obs, reward, terminated, infos = self.env.step(action, is_test=True)
 
             if render:
@@ -215,21 +259,7 @@ class Evaluate:
                     [self.env.position.unsqueeze(1), self.env.target.unsqueeze(1)],
                     dim=1,
                 )
-                # reshape and concatenate visual obs along the width dimension
-                B, C, H, W = obs["depth"].shape
-                obs_grid = (
-                    obs["depth"].permute(2, 0, 3, 1).reshape(H, B * W, C).cpu().numpy()
-                )
-                obs_grid = (obs_grid - obs_grid.min()) / (
-                    obs_grid.max() - obs_grid.min()
-                )
-                cv2.imshow("agent cams", obs_grid)
-
-                render_obs = rgba2rgb(
-                    self.env.scene_manager.render(**self.render_kwargs)
-                )
-                render_grid = np.hstack(render_obs)
-                cv2.imshow("render cams", render_grid)
+                # ... (render 邏輯) ...
                 cv2.waitKey(1)
 
             # log
@@ -255,6 +285,17 @@ class Evaluate:
 
                 else:
                     # metrics to log only once at the end of the episode
+                    
+                    # <<< START MODIFICATION 3.18: (可選) 重置已終止的隱藏狀態 >>>
+                    if hasattr(self.policy, "is_temporal_attention") and self.policy.is_temporal_attention:
+                        h_t, history_buffer = latent_tuple
+                        h_t[index] = 0.
+                        history_buffer[index] = 0.
+                        latent_tuple = (h_t, history_buffer)
+                    elif self.policy.is_recurrent:
+                        latent_state[index] = 0.
+                    # <<< END MODIFICATION 3.18 >>>
+                    
                     eval_info_id_list.remove(index)
 
                     agent_logs[index]["collision"] = (
@@ -303,37 +344,51 @@ class Evaluate:
                     ].item()
 
                     # path length
-                    points = th.stack(agent_logs[index]["position"])
-                    path_length = (points[1:] - points[:-1]).norm(dim=1).sum()
-                    agent_logs[index]["path_length"] = path_length.item()
+                    if agent_logs[index]["position"]: # 確保列表不為空
+                        points = th.stack(agent_logs[index]["position"])
+                        if len(points) > 1: # 確保至少有兩個點
+                            path_length = (points[1:] - points[:-1]).norm(dim=1).sum()
+                            agent_logs[index]["path_length"] = path_length.item()
+
+                    # (已保留)
+                    if agent_logs[index]["acceleration"]: # 確保列表不為空
+                        acceleration = th.tensor(agent_logs[index]["acceleration"])
+                        energy_proxy = (acceleration**2).sum() * self.env.dynamics.ctrl_dt
+                        agent_logs[index]["total_energy_proxy"] = energy_proxy.item()
 
                     # control effort
-                    jerk = th.tensor(agent_logs[index]["jerk"])
-                    total_control_effort = (jerk**2).sum() * self.env.dynamics.ctrl_dt
-                    avg_control_effort = total_control_effort / len(jerk)
-                    agent_logs[index]["avg_control_effort"] = avg_control_effort.item()
+                    if agent_logs[index]["jerk"] and len(agent_logs[index]["jerk"]) > 0: # 確保列表不為空
+                        jerk = th.tensor(agent_logs[index]["jerk"])
+                        total_control_effort = (jerk**2).sum() * self.env.dynamics.ctrl_dt
+                        avg_control_effort = total_control_effort / len(jerk)
+                        agent_logs[index]["avg_control_effort"] = avg_control_effort.item()
 
             if terminated.all():
                 break
 
         batch_stats = {
             "avg_speed": [
-                th.tensor(agent["speed"]).mean().item() for agent in agent_logs
+                th.tensor(agent["speed"]).mean().item() if agent["speed"] else 0.0
+                for agent in agent_logs
             ],
             "max_speed": [
-                th.tensor(agent["speed"]).max().item() for agent in agent_logs
+                th.tensor(agent["speed"]).max().item() if agent["speed"] else 0.0
+                for agent in agent_logs
             ],
             "max_acceleration": [
-                th.tensor(agent["acceleration"]).max().item() for agent in agent_logs
+                th.tensor(agent["acceleration"]).max().item() if agent["acceleration"] else 0.0
+                for agent in agent_logs
             ],
             "avg_yaw_rate": [
-                th.tensor(agent["yaw_rate"]).mean().item() for agent in agent_logs
+                th.tensor(agent["yaw_rate"]).mean().item() if agent["yaw_rate"] else 0.0
+                for agent in agent_logs
             ],
             "max_yaw_rate": [
-                th.tensor(agent["yaw_rate"]).max().item() for agent in agent_logs
+                th.tensor(agent["yaw_rate"]).max().item() if agent["yaw_rate"] else 0.0
+                for agent in agent_logs
             ],
             "avg_min_obstacle_distance": [
-                th.tensor(agent["obstacle_distance"]).min().item()
+                th.tensor(agent["obstacle_distance"]).min().item() if agent["obstacle_distance"] else 0.0
                 for agent in agent_logs
             ],
             "collision_count": [agent["collision"] for agent in agent_logs],
@@ -344,6 +399,7 @@ class Evaluate:
             "steps": [agent["steps"] for agent in agent_logs],
             "path_length": [agent["path_length"] for agent in agent_logs],
             "avg_control_effort": [agent["avg_control_effort"] for agent in agent_logs],
+            "total_energy_proxy": [agent["total_energy_proxy"] for agent in agent_logs], # (已保留)
             "last_action_x": [agent["last_action_x"] for agent in agent_logs],
             "last_action_y": [agent["last_action_y"] for agent in agent_logs],
             "last_action_z": [agent["last_action_z"] for agent in agent_logs],

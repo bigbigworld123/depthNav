@@ -1,0 +1,54 @@
+# examples/navigation/eval_cfg/eval_level_2_dual_ring.yaml
+env_class: navigation_env
+env:
+  num_envs: 16
+  seed: 42
+  visual: True
+  single_env: False 
+  robot_radius: 0.25
+
+  random_kwargs:
+    safe_spawn_radius: 0.1
+    min_starting_distance_to_target: 20.0 # 至少 20m 远
+    
+    # L2 出生点 (21m 处，双环外)
+    position:
+      class: cylinder
+      mean: [0., 0., 1.5]
+      half: [21.0, 21.0, 1.0] 
+    
+    # 目标点 (中心)
+    target:
+      class: uniform
+      mean: [0., 0., 1.5]
+      half: [0., 0., 0.]
+
+    velocity: {class: uniform, mean: [0., 0., 0.], half: [0.0, 0.0, 0.0]}
+    rotation: {class: normal, mean: [0., 0., 0.], half: [0., 0., 3.14]}
+    target_speed: {class: uniform, mean: [3.], half: [2.]}
+    velocity_noise: {class: normal, mean: [0., 0., 0.], half: [0.0, 0.0, 0.0]}
+    rotation_noise: {class: normal, mean: [0., 0., 0.], half: [0.0, 0.0, 0.0]}
+    gravity: {class: normal, mean: [0., 0., -9.81], half: [0., 0., 0.0]}
+  
+  dynamics_kwargs:
+    action_type: thrust_world_frame
+    dt: 0.02
+    ctrl_dt: 0.02
+    ctrl_delay: 0.0
+    enable_ctrl_smoothing: True
+  
+  scene_kwargs:
+    # --- 关键：指向 L2 双环地图 ---
+    path: configs/curriculum/level_2_dual_ring 
+    reload_scenes: True
+    load_geodesics: False 
+    spawn_obstacles: False
+  
+  sensor_kwargs:
+    - {sensor_type: depth, uuid: depth, resolution: [72, 128], position: [0.1, -0.02, -0.04], orientation: [0, 0, 0], far: 30.0, near: 0.25} 
+  target_kwargs: {success_radius: 0.1}
+  reward_kwargs: {lambda_c: 0, lambda_v: 0} 
+  
+  # --- 关键：给足评估时间 ---
+  max_episode_steps: 1000 
+  device: cpu

@@ -51,8 +51,22 @@ def main(args):
     policy_class = policy_aliases[config["policy_class"]]
     policy_kwargs = config["policy"]
 
+    # <<< START MODIFICATION 3.11: 傳遞 policy_kwargs >>>
+    # 為了支持時間注意力，我們需要將完整的 policy_kwargs 傳遞給構造函數
+    # 並從中提取 MultiInputPolicy 需要的特定參數。
     if policy_class == MultiInputPolicy:
-        policy = policy_class(env.observation_space, **policy_kwargs)
+        policy = policy_class(
+            env.observation_space, 
+            net_arch=policy_kwargs["net_arch"],
+            activation_fn=policy_kwargs["activation_fn"],
+            output_activation_fn=policy_kwargs["output_activation_fn"],
+            feature_extractor_class=policy_kwargs["feature_extractor_class"], # 確保傳遞
+            policy_kwargs=policy_kwargs, # <--- 傳遞完整的 policy 字典
+            output_activation_kwargs=policy_kwargs.get("output_activation_kwargs"),
+            feature_extractor_kwargs=policy_kwargs.get("feature_extractor_kwargs"),
+            device=policy_kwargs.get("device", "cuda")
+        )
+    # <<< END MODIFICATION 3.11 >>>
     else:
         policy = policy_class(**policy_kwargs)
 

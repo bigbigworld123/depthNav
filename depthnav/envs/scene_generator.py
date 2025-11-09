@@ -190,15 +190,13 @@ class SceneGenerator:
         num: int,
         name: str,
         stage: str,
-        keep_in_bounds: Union[List, BoxGenerator] = BoxGenerator(),
-        keep_out_bounds: Union[List, BoxGenerator] = [],
+        obstacle_groups: List[dict] = None,
     ) -> None:
         self.dataset_path = dataset_path
         self.num = num
         self.name = name
         self.stage = stage
-        self.keep_in_bounds = keep_in_bounds
-        self.keep_out_bounds = keep_out_bounds
+        self.obstacle_groups = obstacle_groups if obstacle_groups is not None else []
 
         self.summary_path = str(
             list(Path(self.dataset_path).glob("*.scene_dataset_config.json"))[0]
@@ -236,10 +234,18 @@ class SceneGenerator:
             scene_json["stage_instance"]["template_name"] = self.stage
 
             # objects
-            for generator in self.keep_in_bounds:
+            # objects
+            # 遍历新的 obstacle_groups 结构
+            for group in self.obstacle_groups:
+                generator = group['keep_in']
+                # 获取该组专属的 keep_out 列表，如果未定义则为空列表
+                keep_out_list = group.get('keep_out', [])
+
                 positions, orientations, sizes, ids = generator.sample()
                 valid = th.ones(len(positions), dtype=th.bool)
-                for keep_out in self.keep_out_bounds:
+
+                # 应用专属的 keep_out 列表
+                for keep_out in keep_out_list:
                     outside = ~keep_out.is_inside(positions)
                     valid = valid & outside
 

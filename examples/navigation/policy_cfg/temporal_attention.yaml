@@ -1,0 +1,51 @@
+policy_class: MultiInputPolicy
+policy:
+  # --- 創新點 3: 啟用時間注意力 ---
+  use_temporal_attention: True
+  attention_k_steps: 10 # 設置歷史緩衝區大小 (K)
+
+  feature_extractor_class: StateTargetImageExtractor
+  feature_extractor_kwargs:
+    activation_fn: leaky_relu
+    net_arch:
+      state:
+        mlp_layer: [192]
+        bn: False
+        ln: True
+      target:
+        mlp_layer: [192]
+        bn: False
+        ln: True
+      depth:
+        input_max_pool_H_W: [12, 16]
+        kernel_size: [2, 3, 3]
+        channels: [32, 64, 128]
+        padding: [0, 0, 0]
+        stride: [1, 1, 1]
+        cnn_bn: False
+        mlp_layer: [192]
+        bn: False
+        ln: True
+      concatenate: False
+    
+    # --- 創新點 2: 啟用運動調節器 (已繼承) ---
+    use_motion_modulation: True 
+    
+  net_arch:
+    recurrent:
+      class: GRUCell
+      kwargs:
+        hidden_size: 192 # H (必須與特徵維度 192 匹配)
+    
+    # 最終 MLP (在 MlpPolicy 中構建)
+    # 輸入維度將是 H (GRU) + H (Attention) = 384
+    mlp_layer: [256, 128, 4] 
+    
+  activation_fn: leaky_relu
+  output_activation_fn: acceleration_bounded_yaw
+  device: cuda
+
+update_env_kwargs:
+  action_type: THRUST_YAW
+  inertial_frame: START
+  target_type: TARGET_VELOCITY_TARGET_DISTANCE
