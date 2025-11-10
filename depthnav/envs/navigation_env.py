@@ -138,7 +138,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    # self.omega,
+                    self.omega,
                 ]
             ).to(self.device)
 
@@ -155,7 +155,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    # self.omega,
+                    self.omega,
                 ]
             ).to(self.device)
 
@@ -171,7 +171,7 @@ class NavigationEnv(BaseEnv):
                 [
                     q_noised,
                     v_noised,
-                    # self.omega,
+                    self.omega,
                 ]
             ).to(self.device)
 
@@ -328,6 +328,97 @@ class NavigationEnv(BaseEnv):
 
         return obs
 
+# (在 depthnav/envs/navigation_env.py 中)
+    
+    def _calculate_rapf_from_depth(self, depth_image: th.Tensor):
+        """
+        根据深度图计算“平滑的排斥力”和“紧急的旋转力”。
+        
+        输出:
+            F_rep_body (th.Tensor): (B, 3) 身体坐标系下的 *渐进* 排斥力
+            F_rot_body (th.Tensor): (B, 3) 身体坐标系下的 *条件* 旋转力 (只在卡住时非零)
+        """
+        # 确保depth_image在正确的设备上
+        depth_image = depth_image.to(self.device)
+        
+        B, C, H, W = depth_image.shape
+        device = self.device
+
+        # --- 1. 获取参数 ---
+        repulsive_range = self.reward_kwargs.get("rapf_repulsive_range", 5.0) 
+        repulsive_k = self.reward_kwargs.get("rapf_k_rep", 1.5)             
+        rotational_k = self.reward_kwargs.get("rapf_k_rot", 1.0)            
+        stuck_threshold = self.reward_kwargs.get("rapf_stuck_threshold", 0.5)
+        stop_velocity_threshold = self.reward_kwargs.get("rapf_stop_velocity", 0.1)
+            
+        # --- 2. 获取传感器信息 (用于计算像素方向) ---
+        try:
+            sensor_cfg = [s for s in self._sensor_kwargs if s['uuid'] == 'depth'][0]
+            hfov = np.deg2rad(sensor_cfg.get("hfov", 89))
+        except Exception:
+            hfov = np.deg2rad(89) # 默认值
+
+        # --- 3. 计算“平滑”的排斥力 (F_rep) ---
+        
+        # 3.1. 计算“威胁密度”
+        depth_clamped = th.clamp(depth_image, min=0.1, max=repulsive_range)
+        # 威胁 = k * (1/d - 1/d_max)^2。 距离越近，威胁越大。
+        # 这是一个平滑变化的函数，而不是一个“悬崖”。
+        threat_density = repulsive_k * (1.0 / depth_clamped - 1.0 / repulsive_range) ** 2
+        threat_density = threat_density.squeeze(1) # 形状 (B, H, W)
+
+        # 3.2. 计算每个像素的方向向量 (在传感器坐标系下)
+        tan_half_hfov = np.tan(hfov / 2.0)
+        aspect_ratio = W / H
+        
+        v = th.linspace(-tan_half_hfov / aspect_ratio, tan_half_hfov / aspect_ratio, H, device=device)
+        u = th.linspace(-tan_half_hfov, tan_half_hfov, W, device=device)
+        grid_v, grid_u = th.meshgrid(v, u, indexing='ij') # 形状 (H, W)
+
+        # 3.3. 计算总排斥力
+        # 确保grid_u和grid_v也在正确的设备上
+        grid_u = grid_u.to(device)
+        grid_v = grid_v.to(device)
+        
+        horizontal_force_map = threat_density * grid_u
+        F_rep_y_body = -th.sum(horizontal_force_map, dim=[1, 2]) # (B,)
+
+        vertical_force_map = threat_density * grid_v
+        F_rep_z_body = -th.sum(vertical_force_map, dim=[1, 2]) # (B,)
+        
+        F_rep_x_body = th.zeros_like(F_rep_y_body) 
+        
+        # 合成身体坐标系下的排斥力 (B, 3)
+        F_rep_body = th.stack([F_rep_x_body, F_rep_y_body, F_rep_z_body], dim=1)
+
+        # --- 4. 计算“紧急”的旋转力 (F_rot) ---
+        
+        # 4.1. 找到最开阔的方向 (最大深度的像素)
+        flat_depth = depth_image.view(B, -1)
+        min_depth_val, _ = th.min(flat_depth, dim=1)
+        _, max_depth_idx = th.max(flat_depth, dim=1) # (B,)
+        
+        # 找到这个像素对应的 (u, v) 方向
+        max_depth_u = grid_u.reshape(-1)[max_depth_idx] # (B,)
+        max_depth_v = grid_v.reshape(-1)[max_depth_idx] # (B,)
+
+        # 4.2. 构建旋转力 (身体坐标系)
+        F_rot_x_body = th.ones_like(max_depth_u) 
+        F_rot_y_body = max_depth_u * rotational_k 
+        F_rot_z_body = -max_depth_v * rotational_k 
+        
+        F_rot_body = th.stack([F_rot_x_body, F_rot_y_body, F_rot_z_body], dim=1) # (B, 3)
+        F_rot_body = F.normalize(F_rot_body + 1e-8, dim=1)
+
+        # 4.3. 判断是否“卡住”
+        # 如果最近的障碍物距离小于阈值，则认为“卡住”，激活旋转力
+        is_stuck = (min_depth_val < stuck_threshold) # (B,)
+        is_stopping = (self.velocity.norm(dim=1) < stop_velocity_threshold) # (B,)
+        
+        # 只有卡住且速度较低时才施加旋转力
+        F_rot_body = F_rot_body * (is_stuck & is_stopping).unsqueeze(-1)
+        
+        return F_rep_body, F_rot_body
     def get_reward(self, action=None) -> th.Tensor:
         """
         BNL reward function
@@ -354,8 +445,34 @@ class NavigationEnv(BaseEnv):
             # loss_grad = -th.sum(F.normalize(geodesic_gradient) * F.normalize(self.velocity), dim=1)
             desired_direction_vector = geodesic_gradient
         else:
-            desired_direction_vector = self.target_direction
-            # loss_grad = th.zeros(self.num_envs)
+            # --- START MODIFICATION (范式B：奖励函数负责避障) ---
+            
+            # 1. 吸引力 (F_att)：始终指向最终目标 (在 START 坐标系)
+            F_att_start = self.target_direction 
+
+            try:
+                # 2. 计算身体坐标系下的排斥力和旋转力
+                F_rep_body, F_rot_body = self._calculate_rapf_from_depth(self.sensor_obs['depth'])
+                
+                # 3. 将所有力转换到 START 坐标系
+                F_rep_start = th.matmul(self.rot_ws.R, F_rep_body.unsqueeze(-1)).squeeze(-1)
+                F_rot_start = th.matmul(self.rot_ws.R, F_rot_body.unsqueeze(-1)).squeeze(-1)
+                
+                # 4. 从配置中获取力的权重
+                k_att = self.reward_kwargs.get("rapf_k_att", 1.0) 
+                k_rep = self.reward_kwargs.get("rapf_k_rep_reward", 2.0) # (排斥力权重)
+                k_rot = self.reward_kwargs.get("rapf_k_rot_reward", 1.0) # (旋转力权重)
+
+                # 5. 合成最终的力向量
+                # F_rep 是渐进的，所以这个向量是平滑变化的
+                combined_force = k_att * F_att_start + k_rep * F_rep_start + k_rot * F_rot_start
+                
+                # 6. 归一化为期望的“方向向量”
+                desired_direction_vector = F.normalize(combined_force + 1e-8, dim=1)
+            
+            except (AttributeError, KeyError):
+                # 异常处理：在第一帧深度图还没准备好时，先用直线代替
+                desired_direction_vector = self.target_direction
 
         # collision loss
         def positive_speed_towards_collision(
@@ -422,14 +539,13 @@ class NavigationEnv(BaseEnv):
         # at high speeds, yaw should track velocity
         # avg_vel = self.moving_average_velocity.clone().detach()
         # desired_yaw_vector = avg_vel
-        avg_vel = self.exp_moving_average_velocity.clone().detach()
-        # t = (1. / vel_thresh_slerp_yaw) * avg_vel.norm(dim=1, keepdim=True) # t = 1 when vel.norm == vel_thresh_slerp_yaw
-        t = (self.position - self.start_position).norm(dim=1, keepdim=True)
-        desired_yaw_vector = (
-            slerp(self.target_direction, avg_vel, t).clone().detach()
-        )  # works, but should try without detach
+        # avg_vel = self.exp_moving_average_velocity.clone().detach()
+        # # t = (1. / vel_thresh_slerp_yaw) * avg_vel.norm(dim=1, keepdim=True) # t = 1 when vel.norm == vel_thresh_slerp_yaw
+        # t = (self.position - self.start_position).norm(dim=1, keepdim=True)
+        desired_yaw_vector = desired_direction_vector.clone().detach()
+        
+        # （原有的 slerp 逻辑不再需要，因为 RAPF 向量已经包含了避障智慧）
         loss_yaw = -(desired_yaw_vector * self.yaw_vector).sum(dim=1)
-
         # WORKS
         # loss_yaw = F.smooth_l1_loss(self.yaw_vector, desired_yaw_vector, reduction="none")
         # loss_yaw = loss_yaw.sum(dim=1)

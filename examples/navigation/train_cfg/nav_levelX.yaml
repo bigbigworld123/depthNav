@@ -58,7 +58,7 @@ env:
   scene_kwargs:
     path: configs/level_1
     reload_scenes: True
-    load_geodesics: True
+    load_geodesics: False
     spawn_obstacles: False
   sensor_kwargs:
     - sensor_type: depth
@@ -82,7 +82,14 @@ env:
     lambda_yaw: 4.0
     lambda_vmax: 1.0
     falloff_dis: 1.0
-  max_episode_steps: 600
+    rapf_repulsive_range: 3.0  # 障碍物在5米外开始产生排斥力
+    rapf_k_rep: 1.5            # 排斥力计算的增益
+    rapf_k_rot: 1.0            # 旋转力计算的增益
+    rapf_stuck_threshold: 0.5  # 距离障碍物1米时触发旋转力
+    rapf_k_att: 1.0            # 奖励中，吸引力向量的权重
+    rapf_k_rep_reward: 0.8     # 奖励中，排斥力向量的权重
+    rapf_k_rot_reward: 0.5     # 奖励中，旋转力向量的权重
+  max_episode_steps: 800
   device: cpu
 
 
