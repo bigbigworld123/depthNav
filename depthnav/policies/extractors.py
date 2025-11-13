@@ -25,9 +25,11 @@ class FeatureExtractor(nn.Module):
         net_arch: Dict,
         activation_fn: Type[nn.Module] = nn.ReLU,
         features_dim: int = 1,
+        device: th.device = th.device("cpu"),
     ):
         super().__init__()
         self._features_dim = features_dim
+        self.device = device
         # self._is_recurrent = False
         if isinstance(activation_fn, str):
             activation_fn = self.activation_fn_alias[activation_fn]
@@ -265,7 +267,7 @@ def create_cnn(
 #     return kwargs.get("hidden_size")
 
 
-def set_mlp_feature_extractor(cls, name, observation_space, net_arch, activation_fn):
+def set_mlp_feature_extractor(cls, name, observation_space, net_arch, activation_fn, device=th.device("cpu")):
     layer = net_arch.get("mlp_layer", [])
     features_dim = layer[-1] if len(layer) != 0 else observation_space.shape[0]
     if len(observation_space.shape) == 1:
@@ -282,6 +284,7 @@ def set_mlp_feature_extractor(cls, name, observation_space, net_arch, activation
             activation_fn=activation_fn,
             batch_norm=net_arch.get("bn", False),
             layer_norm=net_arch.get("ln", False),
+            device=device,
         ),
     )
     return features_dim
@@ -321,18 +324,20 @@ class StateExtractor(FeatureExtractor):
         observation_space: spaces.Dict,
         net_arch: Optional[Dict] = {},
         activation_fn: Type[nn.Module] = nn.ReLU,
+        device: th.device = th.device("cpu"),
     ):
         assert "state" in observation_space.spaces
+        self.device = device
         super().__init__(observation_space, net_arch, activation_fn)
 
     def _build(self, observation_space, net_arch, activation_fn):
         feature_dim = set_mlp_feature_extractor(
-            self, "state", observation_space["state"], net_arch["state"], activation_fn
+            self, "state", observation_space["state"], net_arch["state"], activation_fn, self.device
         )
         self._features_dim = feature_dim
 
     def extract(self, observations) -> th.Tensor:
-        return self.state_extractor(observations["state"])
+        return self.state_extractor(observations["state"].to(self.device))
 
 
 class ImageExtractor(FeatureExtractor):

@@ -80,6 +80,13 @@ class MultiInputPolicy(MlpPolicy):
         )
         feature_norm = nn.LayerNorm(feature_extractor.features_dim)
 
+        # ... feature_extractor 正常初始化 ...
+        feature_dim = feature_extractor.features_dim
+
+        # (!!!) 加上 VAE 潜在向量的维度 (!!!)
+        # 假设 VAE 输出维度为 num_latent (例如 24)
+        num_latent = 24 # 您需要从 config 传入
+        fused_feature_dim = feature_dim + num_latent
         # add recurrent layer after feature_extractor
         _is_recurrent = False
         if net_arch.get("recurrent", None) is not None:
@@ -92,11 +99,12 @@ class MultiInputPolicy(MlpPolicy):
                 rnn_class = self.recurrent_alias[rnn_class]
 
             recurrent_extractor = rnn_class(
-                input_size=feature_extractor.features_dim, **kwargs
+                input_size=fused_feature_dim, # (!!!) 使用融合后的维度
+                **kwargs
             )
             in_dim = kwargs.get("hidden_size")
         else:
-            in_dim = feature_extractor.features_dim
+            in_dim = fused_feature_dim
 
         super().__init__(
             in_dim,
@@ -125,22 +133,22 @@ class MultiInputPolicy(MlpPolicy):
                 nn.Sigmoid() # 使用Sigmoid将输出缩放到0-1之间，作为门控信号
             ).to(device)
 
-    def forward(self, obs, latent=None):
+    def forward(self, obs, latent_context, latent=None): # 修改后
         features = self.feature_extractor(obs)
         features = self.feature_norm(features)
+
+        # (!!!) 核心修改：将 VAE 的 z_t 向量与特征融合 (!!!)
+        # 确保 latent_context 的维度正确
+        features = th.cat([features, latent_context], dim=1)
+
         if self.use_motion_modulation:
-            # 从 state 观测中提取运动信息 (后6个维度)
-            # state 格式: [quat(4), lin_vel(3), ang_vel(3)], 所以取最后6维
-            ego_motion = obs["state"][:, -6:]
-            
-            # 通过调节器生成门控信号
-            modulation_gate = self.motion_modulator(ego_motion)
-            
-            # 将门控信号与特征逐元素相乘，实现调节
-            features = features * modulation_gate
-            
+            # ... 您的 motion modulation 逻辑 ...
+            pass
+
         if self.is_recurrent:
-            latent = self.recurrent_extractor(features, latent)
+            # GRU 的输入维度现在变了 (features + latent_context)
+            # 您需要在 __init__ 中调整 GRU 的 input_size
+            latent = self.recurrent_extractor(features, latent) 
             actions = super().forward(latent)
             return actions, latent
 

@@ -164,7 +164,7 @@ class BaseEnv:
             if self.visual:
                 return {
                     "state": self.state.to(self.device),
-                    "depth": th.from_numpy(self.sensor_obs["depth"]).to(self.device),
+                    "depth": self.sensor_obs["depth"].to(self.device),
                 }
             else:
                 return {

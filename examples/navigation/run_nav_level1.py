@@ -19,7 +19,7 @@ if __name__ == "__main__":
         "examples/navigation/train_cfg/nav_levelX.yaml",
     ]
     run_experiment(
-        script="depthnav/scripts/train_bptt.py",
+        script="depthnav/scripts/train_shac.py",
         experiment_dir="examples/navigation/logs/level1_no_toa_no_yaw", # 建议使用新的日志目录
         config_keys=config_keys,
         run_params=run_params,
