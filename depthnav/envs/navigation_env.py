@@ -85,7 +85,16 @@ class NavigationEnv(BaseEnv):
             scene_kwargs=scene_kwargs,
             sensor_kwargs=sensor_kwargs,
         )
-
+        # 从父类 *读取* state_size 属性
+        current_state_size = self.state_size 
+        
+        # 使用读取到的值来定义特权观测空间
+        self.privileged_observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(current_state_size,),
+            dtype=np.float32,
+        )
         # target generator
         self.target_kwargs = target_kwargs or {}
         self.target_rng = self._create_rng(
@@ -214,8 +223,7 @@ class NavigationEnv(BaseEnv):
                 self.target_rng, too_close_indices, safe_spawn_radius
             ).to(self.device)
         timerlog.timer.toc("sample_targets")
-
-        up = th.tensor([[0.0, 0.0, 1.0]]).expand(len(indices), 3)
+        up = th.tensor([[0.0, 0.0, 1.0]], device=self.device).expand(len(indices), 3)
         target_dir_wf = self._target[indices] - position
         start_rot = self.dynamics._calc_orientation(up, target_dir_wf, self.device)
         super().reset_agents(pos=position, start_rot=start_rot, indices=indices)
@@ -312,6 +320,7 @@ class NavigationEnv(BaseEnv):
 
         obs = {
             "state": self.state.to(self.device),
+            "privileged_state": self.state.to(self.device) # <-- 新增：为 Critic 提供真实状态
         }
         if self.visual:
             obs["depth"] = self.sensor_obs["depth"]

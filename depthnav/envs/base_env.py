@@ -55,14 +55,15 @@ class BaseEnv:
         self._collision_vector = None
 
         # state
-        self._step_count = th.zeros((self.num_envs,), dtype=th.int32)
-        self._reward = th.zeros((self.num_envs,))
-        self._rewards = th.zeros((self.num_envs,))
-        self._action = th.zeros((self.num_envs, 4))
-        self._success = th.zeros(self.num_envs, dtype=bool)
-        self._done = th.zeros(self.num_envs, dtype=bool)
+        self._step_count = th.zeros((self.num_envs,), dtype=th.int32, device=self.device)
+        self._reward = th.zeros((self.num_envs,), device=self.device)
+        self._rewards = th.zeros((self.num_envs,), device=self.device)
+        self._action = th.zeros((self.num_envs, 4), device=self.device)
+        self._success = th.zeros(self.num_envs, dtype=bool, device=self.device)
+        self._done = th.zeros(self.num_envs, dtype=bool, device=self.device)
         self._info = [{"TimeLimit.truncated": False} for _ in range(self.num_envs)]
 
+        
         # state generators
         self.random_kwargs = random_kwargs or {}
         self.position_rng = self._create_rng("position", self.random_kwargs)
@@ -420,12 +421,23 @@ class BaseEnv:
     ):
         aliases = {"uniform": Uniform, "normal": Normal, "cylinder": Cylinder}
         try:
+            # --- 关键修复：将 rng 实例移动到 self.device ---
+            if key not in random_kwargs:
+                # 确保默认 rng 也在正确的设备上
+                return default_rng.to(self.device)
+            
             rng_class = aliases[random_kwargs[key]["class"]]
             mean = random_kwargs[key]["mean"]
             half = random_kwargs[key]["half"]
-            return rng_class(mean, half)
+            
+            # 创建实例并立即将其移动到 self.device
+            return rng_class(mean, half).to(self.device)
+            # --- 结束修复 ---
+            
         except:
-            return default_rng
+            # --- 关键修复：确保 default_rng 也在正确的 device 上 ---
+            return default_rng.to(self.device)
+            # --- 结束修复 ---
 
     @timerlog.timer.timed
     def safe_generate(

@@ -1,3 +1,5 @@
+# 文件: depthnav/utils/type.py
+
 from dataclasses import dataclass
 import torch as th
 from typing import Union, Any
@@ -23,7 +25,11 @@ class Uniform:
         return self
 
     def generate(self, size, generator=None):
-        return (th.rand(size, generator=generator) - 0.5) * self.half + self.mean
+        # --- 关键修复：指定 device ---
+        device = self.mean.device
+        rand_tensor = th.rand(size, generator=generator, device=device)
+        return (rand_tensor - 0.5) * self.half + self.mean
+        # --- 结束修复 ---
 
 
 class Normal:
@@ -44,7 +50,11 @@ class Normal:
         return self
 
     def generate(self, size, generator=None):
-        return th.randn(size, generator=generator) * self.std + self.mean
+        # --- 关键修复：指定 device ---
+        device = self.mean.device
+        randn_tensor = th.randn(size, generator=generator, device=device)
+        return randn_tensor * self.std + self.mean
+        # --- 结束修复 ---
 
 
 class Cylinder:
@@ -67,13 +77,18 @@ class Cylinder:
     def generate(self, size, generator=None):
         if type(size) == tuple:
             n = size[0] if type(size) == tuple else size.shape[0]
-        theta = 2.0 * th.pi * th.rand(n, generator=generator)
-        x = self.half[0] * th.cos(theta)
-        y = self.half[1] * th.sin(theta)
-        z = self.half[2] * th.rand(n) - 0.5
+        
+        # --- 关键修复：指定 device ---
+        device = self.mean.device
+        theta = 2.0 * th.pi * th.rand(n, generator=generator, device=device)
+        r = self.half[0] * th.sqrt(th.rand(n, generator=generator, device=device))
+        z = self.half[2] * th.rand(n, generator=generator, device=device) - 0.5
+        # --- 结束修复 ---
+        
+        x = r * th.cos(theta)
+        y = r * th.sin(theta)
         samples = th.stack([x, y, z], dim=1) + self.mean
         return samples
-
 
 # create a dict designed for tensor that can use detach
 class TensorDict(dict):

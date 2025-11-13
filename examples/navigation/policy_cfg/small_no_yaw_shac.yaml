@@ -1,0 +1,53 @@
+# 文件另存为:
+# bigbigworld123/depthnav/depthNav-main/examples/navigation/policy_cfg/small_no_yaw_shac.yaml
+
+policy_class: MultiInputPolicy
+policy:
+  feature_extractor_class: StateTargetImageExtractor
+  feature_extractor_kwargs:
+    activation_fn: leaky_relu
+    net_arch:
+      state:
+        mlp_layer: [192]
+        bn: False
+        ln: True
+      target:
+        mlp_layer: [192]
+        bn: False
+        ln: True
+      depth:
+        input_max_pool_H_W: [12, 16]
+        kernel_size: [2, 3, 3]
+        channels: [32, 64, 128]
+        padding: [0, 0, 0]
+        stride: [1, 1, 1]
+        cnn_bn: False
+        mlp_layer: [192]
+        bn: False
+        ln: True
+      concatenate: False
+  
+  # 这是 Actor (MultiInputPolicy) 的网络结构
+  net_arch:
+    recurrent:
+      class: GRUCell
+      kwargs:
+        hidden_size: 192
+    mlp_layer: [3] # Actor 的输出层 (x, y, z 推力)
+  
+  # --- 新增：CriticMLP 的网络结构 ---
+  # (我们参考 grad_nav 的配置 
+  #  并使用 depthNav 的激活函数和特征维度)
+  critic_mlp:
+    units: [192, 192] # Critic 的隐藏层大小，与特征维度 192 匹配
+    activation: leaky_relu
+  # --- 结束新增 ---
+
+  activation_fn: leaky_relu
+  output_activation_fn: identity
+  device: cuda
+
+update_env_kwargs:
+  action_type: THRUST_TARGET_YAW
+  inertial_frame: START
+  target_type: TARGET_VELOCITY_TARGET_DISTANCE
