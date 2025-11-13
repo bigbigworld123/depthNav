@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     # for tensorboard
     run_params = {
-        "level0": (False, "configs/box_2", 500),
+        "level0": (False, "configs/box_2", 200),
         "level1": (False, "configs/level_1", 13000),
     }
     base_config_files = [
@@ -28,7 +28,7 @@ if __name__ == "__main__":
         # ==========================================================
         # !! 核心修改：将策略配置文件切换为 "small_no_yaw.yaml" !!
         # ==========================================================
-        policy_config_file="examples/navigation/policy_cfg/small_no_yaw.yaml",
+        policy_config_file="examples/navigation/policy_cfg/spatial_memory_injection.yaml",
 
         eval_configs=[
             "examples/navigation/eval_cfg/nav_level1.yaml",

@@ -34,7 +34,7 @@ def main():
     scene_json = deepcopy(empty_scene)
 
     # --- 定义迷宫的尺寸参数 ---
-    WALL_HEIGHT = 20.0
+    WALL_HEIGHT = 5.0
     WALL_THICKNESS = 1.0
     FLOOR_THICKNESS = 0.1
     WALL_CENTER_Y = (FLOOR_THICKNESS / 2.0) + (WALL_HEIGHT / 2.0)

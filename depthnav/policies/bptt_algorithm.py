@@ -175,18 +175,20 @@ class BPTT:
                     discount_factor = discount_factor * self.gamma * ~done + done
                     latent_state = latent_state * ~done.unsqueeze(1)
                     
-                    # Detach tensors to prevent computation graph accumulation
-                    if isinstance(actions, th.Tensor):
-                        actions = actions.detach()
-                    if isinstance(reward, th.Tensor):
-                        reward = reward.detach()
-                    if isinstance(done, th.Tensor):
-                        done = done.detach()
+                    # [!!] 修正: 移除循环内部的 detach [!!]
+                    #
+                    # # Detach tensors to prevent computation graph accumulation (错误的做法!)
+                    # if isinstance(actions, th.Tensor):
+                    #     actions = actions.detach()
+                    # if isinstance(reward, th.Tensor):
+                    #     reward = reward.detach()
+                    # if isinstance(done, th.Tensor):
+                    #     done = done.detach()
                     
-                    # Explicitly detach observation tensors to prevent memory buildup
-                    for key in obs:
-                        if isinstance(obs[key], th.Tensor):
-                            obs[key] = obs[key].detach()
+                    # # Explicitly detach observation tensors to prevent memory buildup (错误的做法!)
+                    # for key in obs:
+                    #     if isinstance(obs[key], th.Tensor):
+                    #         obs[key] = obs[key].detach()
 
                 episode_steps += self.horizon
                 total_steps = self.env.num_envs * self.horizon
@@ -212,7 +214,7 @@ class BPTT:
                 self.optimizer.step()
                 self.lr_schedule.step()
 
-                # detach gradients properly
+                # [!!] 修正: 在反向传播和优化器步骤 *之后* 才 detach [!!]
                 self.env.detach()
                 latent_state = latent_state.detach()
                 loss = loss.detach()

@@ -82,6 +82,12 @@ env:
     lambda_yaw: 4.0
     lambda_vmax: 1.0
     falloff_dis: 1.0
+    # --- [新] 在这里添加您S的APF/RAPF参数 ---
+    k_att: 1.5       # 吸引力增益
+    k_rep: 1.0       # 排斥力增益
+    k_rot: 0.5       # 旋转力增益
+    d_rep_thresh: 3.0  # 排斥力开始作用的距离
+    d_rot_thresh: 3.0  # 旋转力开始作用的距离
   max_episode_steps: 600
   device: cpu
 

@@ -99,7 +99,18 @@ class NavigationEnv(BaseEnv):
             default_rng=Uniform([self.target_kwargs.get("target_speed", 5.0)], [0.0]),
         )
         self.success_radius = self.target_kwargs.get("success_radius", 0.5)
+        
+        # --- [修改点 1] APF/RAPF 参数 ---
         self.reward_kwargs = reward_kwargs or {}
+        # 从reward_kwargs加载APF/RAPF参数，参考论文
+        self.k_att = self.reward_kwargs.get("k_att", 1.5)
+        self.k_rep = self.reward_kwargs.get("k_rep", 1.0)
+        self.k_rot = self.reward_kwargs.get("k_rot", 0.5)
+        # 对应论文中的 r_o (障碍物影响范围)
+        self.d_rep_thresh = self.reward_kwargs.get("d_rep_thresh", 3.0) 
+        # 对应论文中的 r_o (旋转力影响范围)
+        self.d_rot_thresh = self.reward_kwargs.get("d_rot_thresh", 3.0) 
+        # --- 结束 [修改点 1] ---
 
         # properties that we expose as read-only
         self._target = th.zeros((self.num_envs, 3), device=self.device)
@@ -328,6 +339,86 @@ class NavigationEnv(BaseEnv):
 
         return obs
 
+    # --- [修改点 2] 新增 APF/RAPF 辅助函数 ---
+    
+    def _calculate_attractive_force(self) -> th.Tensor:
+        """
+        计算指向目标的吸引力 (参考论文 Eq. 6)。
+        使用一个简化的线性版本：F_att = k_att * direction_to_target
+        """
+        # self.target_direction 已经在 @property 中计算好了
+        return self.k_att * self.target_direction
+
+    def _calculate_repulsive_force(self) -> th.Tensor:
+        """
+        计算来自最近障碍物的排斥力 (参考论文 Eq. 7)。
+        F_rep = k_rep * (1/d - 1/d_thresh) * (1/d^2) * grad(d)
+        """
+        d = self.collision_dis.unsqueeze(1)  # 距离 d, Shape: (N, 1)
+        d_thresh = self.d_rep_thresh # 影响阈值 r_o
+
+        # 创建一个mask，只在影响范围内才计算排斥力
+        mask = (d < d_thresh).float()
+
+        # grad(d) 是从障碍物指向UAV的方向
+        # self.collision_vector 是 (collision_point - position), 方向指向障碍物
+        grad_d = -F.normalize(self.collision_vector, dim=1) # Shape: (N, 3)
+
+        # 计算力的幅度 (为避免d=0时除零，增加一个很小的epsilon)
+        d_eps = d + 1e-6
+        f_mag = self.k_rep * (1.0 / d_eps - 1.0 / d_thresh) * (1.0 / d_eps**2)
+        
+        # 仅在阈值内施加力
+        F_rep = f_mag * grad_d * mask
+        return F_rep
+
+    def _calculate_rotational_force(self) -> th.Tensor:
+        """
+        计算旋转力以逃离局部最小值 (参考论文 Eq. 9 & 10)。
+        """
+        d = self.collision_dis.unsqueeze(1) # Shape (N, 1)
+        d_thresh = self.d_rot_thresh # 影响阈值 r_o
+
+        # 只在影响范围内才计算旋转力
+        mask = (d < d_thresh).float()
+        
+        # --- 计算切线向量 T (参考 Eq. 10) ---
+        
+        # 1. 指向目标的向量
+        vec_to_target = self.target_direction # (N, 3)
+        
+        # 2. 指向障碍物的向量 (归一化)
+        vec_to_obstacle = F.normalize(self.collision_vector, dim=1) # (N, 3)
+
+        # 3. 计算角度差 (Delta theta)，以决定顺时针或逆时针
+        #    我们简化为在XY平面上计算
+        angle_to_target = th.atan2(vec_to_target[:, 1], vec_to_target[:, 0])
+        angle_to_obstacle = th.atan2(vec_to_obstacle[:, 1], vec_to_obstacle[:, 0])
+        delta_theta = angle_to_target - angle_to_obstacle
+
+        # 4. 定义旋转轴 n (论文中提到，我们简化为Z轴，适用于2.5D导航)
+        n = th.tensor([0.0, 0.0, 1.0], device=self.device).expand(self.num_envs, -1)
+
+        # 5. 计算切线方向 (即 T_clockwise)
+        # T = (P_o - P_u)_normalized x n 
+        T_clockwise = F.normalize(th.cross(vec_to_obstacle, n, dim=1), dim=1)
+        T_counter_clockwise = -T_clockwise
+
+        # 6. 根据角度差选择切线方向 (Eq. 10 逻辑)
+        T = th.where(delta_theta.unsqueeze(1) > 0, T_clockwise, T_counter_clockwise)
+
+        # --- 计算旋转力 (参考 Eq. 9) ---
+        # 论文中的幅度为 k_rot * (1/d - 1/d_thresh) * (1/d)
+        # 这里我们使用一个更平滑的线性衰减幅度: k_rot * (1 - d/d_thresh)
+        d_eps = d + 1e-6
+        f_mag = self.k_rot * (1.0 - d_eps / d_thresh).clamp(min=0.0)
+        
+        F_rot = f_mag * T * mask
+        return F_rot
+
+    # --- 结束 [修改点 2] ---
+
+
     def get_reward(self, action=None) -> th.Tensor:
         """
         BNL reward function
@@ -347,15 +438,42 @@ class NavigationEnv(BaseEnv):
         safe_view_degrees = self.reward_kwargs.get("safe_view_degrees", 10.0)
         vel_thresh_slerp_yaw = self.reward_kwargs.get("vel_thresh_slerp_yaw", 1.0)
 
-        if self.scene_manager.load_geodesics:
-            # only compute geodesic loss if geodesics are loaded
-            with th.no_grad():
+        # --- [!!] 关键修正: 在 no_grad() 中计算特权信息 [!!] ---
+        # 这种方式模仿了原始代码处理 geodesic_gradient 的方式
+        with th.no_grad():
+            if self.scene_manager.load_geodesics:
+                # 原始的 ToA 方法
+                colorlog.log.warning("load_geodesics is True, using ToA gradient.")
                 geodesic_gradient = self.geodesic_gradient(self.position)
-            # loss_grad = -th.sum(F.normalize(geodesic_gradient) * F.normalize(self.velocity), dim=1)
-            desired_direction_vector = geodesic_gradient
-        else:
-            desired_direction_vector = self.target_direction
-            # loss_grad = th.zeros(self.num_envs)
+                desired_direction_vector = geodesic_gradient
+                
+                # 初始化 metrics 的值
+                F_att_norm_val = th.zeros(self.num_envs).cpu()
+                F_rep_norm_val = th.zeros(self.num_envs).cpu()
+                F_rot_norm_val = th.zeros(self.num_envs).cpu()
+                F_res_norm_val = th.zeros(self.num_envs).cpu()
+            else:
+                # --- APF/RAPF 指导 ---
+                # 计算力
+                F_att = self._calculate_attractive_force()
+                F_rep = self._calculate_repulsive_force()
+                F_rot = self._calculate_rotational_force()
+
+                # 合力
+                F_res = F_att + F_rep + F_rot
+                
+                # [!!] 记录力的范数 (仍在 no_grad 块中) [!!]
+                F_att_norm_val = F_att.norm(dim=1).cpu()
+                F_rep_norm_val = F_rep.norm(dim=1).cpu()
+                F_rot_norm_val = F_rot.norm(dim=1).cpu()
+                F_res_norm_val = F_res.norm(dim=1).cpu()
+
+                # 期望的运动方向是合力的方向
+                desired_direction_vector = F.normalize(F_res, dim=1)
+        
+        # desired_direction_vector 现在是 detached 状态, 梯度不会通过它流向 self.position
+        # --- [!!] 结束关键修正 [!!] ---
+
 
         # collision loss
         def positive_speed_towards_collision(
@@ -385,6 +503,7 @@ class NavigationEnv(BaseEnv):
         loss_vmax = ((self.speed - self.target_speed).relu() ** 2).squeeze(1)
 
         # penalize deviation from target velocity
+        # [!] 梯度从这里流向 self.velocity -> action -> policy
         desired_velocity = self.target_speed * desired_direction_vector
         velocity_difference = (desired_velocity - self.moving_average_velocity).norm(
             dim=1
@@ -394,6 +513,7 @@ class NavigationEnv(BaseEnv):
         )
 
         # smoothness loss on acceleration, jerk, and body rate
+        # [!] 梯度从这里流向 self.acceleration 等 -> self.velocity -> action -> policy
         loss_a = self.acceleration.norm(dim=1) ** 2
         loss_j = self.jerk.norm(dim=1) ** 2
         loss_om = self.omega.norm(dim=1) ** 2
@@ -425,9 +545,13 @@ class NavigationEnv(BaseEnv):
         avg_vel = self.exp_moving_average_velocity.clone().detach()
         # t = (1. / vel_thresh_slerp_yaw) * avg_vel.norm(dim=1, keepdim=True) # t = 1 when vel.norm == vel_thresh_slerp_yaw
         t = (self.position - self.start_position).norm(dim=1, keepdim=True)
+        # desired_yaw_vector = (
+        #     slerp(self.target_direction, avg_vel, t).clone().detach()
+        # )  # works, but should try without detach
         desired_yaw_vector = (
-            slerp(self.target_direction, avg_vel, t).clone().detach()
-        )  # works, but should try without detach
+            slerp(desired_direction_vector, avg_vel, t).clone().detach()
+        )
+        # [!] 梯度从这里流向 self.yaw_vector -> self.rotation -> action -> policy
         loss_yaw = -(desired_yaw_vector * self.yaw_vector).sum(dim=1)
 
         # WORKS
@@ -467,6 +591,9 @@ class NavigationEnv(BaseEnv):
             # + lambda_grad * loss_grad
         )
         reward = -loss
+        
+        # --- [修改点 4] 修正 metrics 字典 ---
+        # 基础 metrics (这些都连接着计算图)
         metrics = {
             "loss_v": (lambda_v * loss_v).clone().detach().cpu(),
             "loss_vmax": (lambda_vmax * loss_vmax).clone().detach().cpu(),
@@ -475,8 +602,16 @@ class NavigationEnv(BaseEnv):
             "loss_j": (lambda_j * loss_j).clone().detach().cpu(),
             "loss_om": (lambda_om * loss_om).clone().detach().cpu(),
             "loss_yaw": (lambda_yaw * loss_yaw).clone().detach().cpu(),
-            # "loss_grad": (lambda_grad * loss_grad).clone().detach().cpu()
         }
+        
+        # 仅当不使用测地线时才记录APF/RAPF的metrics
+        # (这些值来自 no_grad 块, 已经是 detached 的 cpu 张量)
+        if not self.scene_manager.load_geodesics:
+            metrics["F_att_norm"] = F_att_norm_val
+            metrics["F_rep_norm"] = F_rep_norm_val
+            metrics["F_rot_norm"] = F_rot_norm_val
+            metrics["F_res_norm"] = F_res_norm_val
+        # --- 结束 [修改点 4] ---
 
         return reward, metrics
 

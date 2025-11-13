@@ -48,7 +48,7 @@ def main(args):
         "mode": "fix",
         "view": "top",
         # 1. 添加自定义相机高度，您可以调整这个值 (越小越近)
-        "camera_height": 16.0,
+        "camera_height": 30.0,
         # 2. 开启轨迹绘制功能
         "trajectory": True,
         "sensor_type": "color",

@@ -86,8 +86,9 @@ def main():
     add_vertical_wall(scene_json["object_instances"], x_pos=BOUNDARY_EDGE, z_start=-BOUNDARY_EDGE, z_end=BOUNDARY_EDGE)  # 右
     
     # 左侧墙壁留出入口 (对应图片)
-    add_vertical_wall(scene_json["object_instances"], x_pos=-BOUNDARY_EDGE, z_start=-5.0, z_end=BOUNDARY_EDGE) # 入口上方
-    add_vertical_wall(scene_json["object_instances"], x_pos=-BOUNDARY_EDGE, z_start=-BOUNDARY_EDGE, z_end=-9.0) # 入口下方
+
+    # 添加完整的左侧墙壁
+    add_vertical_wall(scene_json["object_instances"], x_pos=-BOUNDARY_EDGE, z_start=-BOUNDARY_EDGE, z_end=BOUNDARY_EDGE)
     
     # ==========================================================
     # !! 3. 内部墙壁布局 (现在您可以轻松修改这里了) !!
@@ -100,10 +101,12 @@ def main():
     add_horizontal_wall(scene_objects=scene_json["object_instances"], z_pos=0.0, x_start=-10.5, x_end=-2.0)
     add_vertical_wall(scene_objects=scene_json["object_instances"], x_pos=-5.0, z_start=-5.0, z_end=0.0)
     add_horizontal_wall(scene_objects=scene_json["object_instances"], z_pos=-5.0, x_start=-2.0, x_end=5.0)
-    add_vertical_wall(scene_objects=scene_json["object_instances"], x_pos=5.0, z_start=-10.5, z_end=0.0)
+    # add_vertical_wall(scene_objects=scene_json["object_instances"], x_pos=5.0, z_start=-10.5, z_end=0.0)
+
+    # 添加缺失的通道
+    add_horizontal_wall(scene_objects=scene_json["object_instances"], z_pos=0.0, x_start=5.0, x_end=10.5)
 
     # --- 保存和更新配置 (无需修改) ---
-    # ... (此部分代码与您原来的一样，无需改动)
     scene_filename = f"{os.path.basename(scene_name)}_0.scene_instance.json"
     save_path = os.path.join(save_dir, scene_filename)
     with open(save_path, "w") as f:
